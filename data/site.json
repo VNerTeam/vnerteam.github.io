@@ -1,10 +1,13 @@
 {
   "name": "VNerTeam",
-  "url": "https://TEN-BAN.github.io",
+  "url": "https://vnerteam.github.io",
   "base": "",
-  "tagline": "Team Vtuber & YouTuber Việt Nam",
+  "tagline": "Vtuber & YouTuber đến từ VNerTeam",
   "description": "VNerTeam - trang chính thức của team Vtuber/YouTuber: thông tin, kênh và lịch phát sóng của các thành viên.",
   "accent": "#7c5cff",
   "footer": "© VNerTeam",
-  "verify": { "google": "", "bing": "" }
+  "verify": {
+    "google": "",
+    "bing": ""
+  }
 }

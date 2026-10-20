@@ -1,0 +1,5 @@
+{"slug":"mau-a","name":"Mẫu A","role":"Vtuber","tags":["Vtuber","Game"],"order":1,"hidden":false,"avatar":"","summary":"Thành viên mẫu, hãy sửa trong /admin.",
+"blocks":[
+{"type":"heading","text":"Xin chào, mình là Mẫu A","style":{"align":"center"}},
+{"type":"text","text":"<p>Giới thiệu ngắn về bản thân.</p>","style":{}},
+{"type":"button","text":"Kênh YouTube","url":"https://youtube.com","hover":"shine","style":{"align":"center"}}]}

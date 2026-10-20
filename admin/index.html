@@ -1,0 +1,55 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>VNerTeam Admin</title>
+<link rel="stylesheet" href="../assets/style.css"><script src="../assets/blocks.js"></script>
+<style>body{display:grid;grid-template-columns:230px 1fr;min-height:100vh}@media(max-width:700px){body{display:block}}
+#side{padding:16px;border-right:1px solid var(--line);background:var(--card)}#side a{display:block;padding:6px 8px;border-radius:8px;cursor:pointer;color:var(--fg);text-decoration:none}#side a:hover{background:var(--line)}
+#main{padding:20px;max-width:900px}label{display:block;font-size:.85rem;margin:8px 0 2px;opacity:.8}
+input,select,textarea{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+button{padding:7px 14px;border:0;border-radius:99px;background:var(--ac);color:#fff;cursor:pointer;font:inherit}button.g{background:var(--line);color:var(--fg)}button.r{background:#e5484d}
+.bx{border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;background:var(--card)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.row>*{flex:1;min-width:110px}.row button{flex:0;white-space:nowrap}
+.pv{border:1px dashed var(--line);border-radius:8px;margin-top:8px;padding:6px}#msg{position:fixed;bottom:16px;right:16px;background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:10px;display:none}</style></head><body>
+<aside id="side"></aside><section id="main"></section><div id="msg"></div>
+<script>
+const $=s=>document.querySelector(s),{E,HOVERS,TYPES}=VB;
+let S=JSON.parse(localStorage.vt||'{"repo":"","br":"main","tok":""}'),L=[],M=null,PV={};
+const toast=t=>{const m=$('#msg');m.textContent=t;m.style.display='block';setTimeout(()=>m.style.display='none',3500)};
+const dec=s=>decodeURIComponent(escape(atob(s.replace(/\n/g,''))));
+const enc=s=>btoa(unescape(encodeURIComponent(s)));
+async function gh(m,p,b){const r=await fetch(`https://api.github.com/repos/${S.repo}/contents/${p}`+(m==='GET'?`?ref=${S.br}`:''),{method:m,headers:{Authorization:'Bearer '+S.tok,Accept:'application/vnd.github+json'},body:b&&JSON.stringify({...b,branch:S.br})});
+ if(r.status==404)return null;if(!r.ok)throw new Error('GitHub '+r.status+' - kiểm tra token/repo');return r.json()}
+async function put(p,c64,msg){const cur=await gh('GET',p);return gh('PUT',p,{message:msg,content:c64,sha:cur?.sha})}
+const A=f=>async(...a)=>{try{await f(...a)}catch(e){toast(e.message)}};
+function side(){$('#side').innerHTML=`<h3>VNer Admin</h3><a onclick="cfg()">⚙ Kết nối GitHub</a><a onclick="site()">🎨 Giao diện chung</a><hr><a onclick="add()"><b>＋ Thêm thành viên</b></a>`+L.map(n=>`<a onclick="edit('${n}')">${E(n)}</a>`).join('')}
+const load=A(async()=>{if(!S.tok)return cfg();const d=await gh('GET','data/members');L=(d||[]).filter(f=>f.name.endsWith('.json')).map(f=>f.name.slice(0,-5));side();if(!M)$('#main').innerHTML='<p>Chọn một thành viên bên trái hoặc thêm mới.</p>'});
+function cfg(){$('#main').innerHTML=`<h2>Kết nối GitHub</h2><p>Tạo <b>fine-grained token</b> chỉ cho repo này, quyền <i>Contents: Read and write</i>. Token chỉ lưu trong trình duyệt của bạn.</p><label>Repo (user/ten-repo)</label><input id="r" value="${E(S.repo)}"><label>Nhánh</label><input id="b" value="${E(S.br)}"><label>Token</label><input id="t" type="password" value="${E(S.tok)}"><p><button onclick="S={repo:r.value.trim(),br:b.value.trim()||'main',tok:t.value.trim()};localStorage.vt=JSON.stringify(S);load()">Lưu</button></p>`}
+const site=A(async()=>{const f=await gh('GET','data/site.json');window.SJ=JSON.parse(dec(f.content));SJ.verify=SJ.verify||{};M=null;const k=['name','tagline','description','url','base','accent','footer'];
+ $('#main').innerHTML='<h2>Giao diện chung</h2>'+k.map(x=>`<label>${x}</label><input value="${E(SJ[x])}" oninput="SJ.${x}=this.value">`).join('')+`<label>Mã xác minh Google</label><input value="${E(SJ.verify.google)}" oninput="SJ.verify.google=this.value"><label>Mã xác minh Bing</label><input value="${E(SJ.verify.bing)}" oninput="SJ.verify.bing=this.value"><p><button onclick="saveSite()">Xuất bản</button></p>`});
+const saveSite=A(async()=>{await put('data/site.json',enc(JSON.stringify(SJ,null,2)),'Cập nhật giao diện');toast('Đã lưu, web cập nhật sau ~1 phút')});
+const edit=A(async n=>{const f=await gh('GET',`data/members/${n}.json`);M=JSON.parse(dec(f.content));M._old=n;draw()});
+function add(){M={slug:'',name:'',role:'Vtuber',tags:[],order:L.length+1,hidden:false,avatar:'',summary:'',blocks:[]};draw()}
+function pick(cb){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=A(async()=>{const f=i.files[0];if(!f)return;toast('Đang tải ảnh...');
+ const im=await createImageBitmap(f),k=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+ const url=c.toDataURL('image/webp',.85),p=`uploads/${Date.now()}-${f.name.replace(/\.[^.]+$/,'').replace(/[^\w-]+/g,'-').slice(0,30)}.webp`;
+ await put(p,url.split(',')[1],'Tải ảnh lên');PV[p]=url;cb(p);toast('Đã tải ảnh lên')});i.click()}
+const SF={heading:['text'],text:['text'],image:['src','alt'],button:['text','url'],youtube:['url'],html:['text'],spacer:[]};
+const U=p=>PV[p]||(/^(https?:|data:)/.test(p)?p:'../'+p);
+function pv(i){$('#pv'+i).innerHTML=VB.render(M.blocks[i],U)}
+function mv(i,d){const j=i+d,a=M.blocks;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];draw()}
+function blk(b,i){const s=b.style||(b.style={});
+ const fl=SF[b.type].map(k=>k=='src'?`<div><label>Ảnh</label><button class="g" onclick="pick(p=>{M.blocks[${i}].src=p;draw()})">Chọn ảnh từ máy</button></div>`:(b.type=='text'||b.type=='html')?`<div style="flex-basis:100%"><label>${b.type=='text'?'Nội dung (HTML cơ bản: &lt;b&gt;, &lt;i&gt;, &lt;a&gt;, &lt;p&gt;)':'Mã HTML'}</label><textarea rows="4" oninput="M.blocks[${i}].${k}=this.value;pv(${i})">${E(b[k])}</textarea></div>`:`<div><label>${k}</label><input value="${E(b[k])}" oninput="M.blocks[${i}].${k}=this.value;pv(${i})"></div>`).join('');
+ const sv=(k,l,t='text')=>`<div><label>${l}</label><input type="${t}" ${t=='range'?'max=60':''} value="${E(s[k]||(t=='color'?'#ffffff':''))}" oninput="M.blocks[${i}].style.${k}=this.value;pv(${i})"></div>`;
+ return `<div class="bx"><div class="row"><b>${TYPES[b.type]}</b><span></span><button class="g" onclick="mv(${i},-1)">↑</button><button class="g" onclick="mv(${i},1)">↓</button><button class="r" onclick="M.blocks.splice(${i},1);draw()">✕</button></div><div class="row">${fl}</div>
+ <div class="row">${sv('bg','Màu nền','color')}${sv('color','Màu chữ','color')}<div><label>Căn lề</label><select onchange="M.blocks[${i}].style.align=this.value;pv(${i})">${['left','center','right'].map(a=>`<option ${s.align==a?'selected':''}>${a}</option>`).join('')}</select></div>${sv('radius','Bo góc','range')}${sv('pad','Khoảng đệm','range')}</div>
+ ${['button','image'].includes(b.type)?`<div class="row"><div><label>Hiệu ứng hover</label><select onchange="M.blocks[${i}].hover=this.value;pv(${i})">${HOVERS.map(([k,v])=>`<option value="${k}" ${b.hover==k?'selected':''}>${v}</option>`).join('')}</select></div><div><label>Tốc độ (giây)</label><input type="number" step=".1" min=".1" max="2" value="${b.speed||.3}" oninput="M.blocks[${i}].speed=this.value;pv(${i})"></div></div>`:''}
+ <div class="pv" id="pv${i}">${VB.render(b,U)}</div></div>`}
+function draw(){$('#main').innerHTML=`<h2>${E(M.name)||'Thành viên mới'}</h2><div class="row"><div><label>Đường dẫn (slug)</label><input value="${E(M.slug)}" oninput="M.slug=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')"></div><div><label>Tên</label><input value="${E(M.name)}" oninput="M.name=this.value"></div><div><label>Vai trò</label><input value="${E(M.role)}" oninput="M.role=this.value"></div></div>
+<div class="row"><div><label>Tag (cách nhau dấu phẩy)</label><input value="${E(M.tags.join(', '))}" oninput="M.tags=this.value.split(',').map(s=>s.trim()).filter(Boolean)"></div><div><label>Thứ tự</label><input type="number" value="${M.order}" oninput="M.order=+this.value"></div><div><label>Hiển thị</label><select onchange="M.hidden=this.value=='1'"><option value="0">Hiện</option><option value="1" ${M.hidden?'selected':''}>Ẩn</option></select></div></div>
+<label>Mô tả SEO</label><input value="${E(M.summary)}" oninput="M.summary=this.value"><label>Ảnh đại diện</label><div class="row"><img class="ava" style="margin:0;width:60px;height:60px;flex:0" src="${E(M.avatar?U(M.avatar):'')}" alt=""><button class="g" onclick="pick(p=>{M.avatar=p;draw()})">Chọn ảnh từ máy</button></div>
+<h3>Các khối của trang</h3>${M.blocks.map(blk).join('')}<div class="row"><select id="nt">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button onclick="M.blocks.push({type:nt.value,style:{}});draw()">＋ Thêm khối</button></div>
+<p><button onclick="save()">Xuất bản</button> ${M._old?'<button class="r" onclick="del()">Xoá thành viên</button>':''}</p>`}
+const save=A(async()=>{if(!M.slug||!M.name)return toast('Cần nhập slug và tên');if(['admin','assets','data','uploads','scripts'].includes(M.slug))return toast('Slug này đã được dành riêng');
+ const o=M._old,d={...M};delete d._old;await put(`data/members/${M.slug}.json`,enc(JSON.stringify(d,null,2)),'Cập nhật '+M.name);
+ if(o&&o!==M.slug){const f=await gh('GET',`data/members/${o}.json`);f&&await gh('DELETE',`data/members/${o}.json`,{message:'Đổi slug',sha:f.sha})}
+ M._old=M.slug;toast('Đã xuất bản, web cập nhật sau ~1 phút');load()});
+const del=A(async()=>{if(!confirm('Xoá '+M.name+'?'))return;const f=await gh('GET',`data/members/${M._old}.json`);await gh('DELETE',`data/members/${M._old}.json`,{message:'Xoá '+M.name,sha:f.sha});M=null;load()});
+load();
+</script></body></html>

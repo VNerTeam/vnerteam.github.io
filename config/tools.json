@@ -1,0 +1,17 @@
+{
+  "ffmpeg": {
+    "repo": "BtbN/FFmpeg-Builds",
+    "tag": "autobuild-2026-10-31-12-59",
+    "asset": "ffmpeg-n8.1.3-27-g8dca1586f4-linux64-gpl-8.1.tar.xz",
+    "fallback_tag": "latest",
+    "fallback_asset": "ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz",
+    "sha256": ""
+  },
+  "ab_av1": {
+    "repo": "alexheretic/ab-av1",
+    "tag": "v0.11.2",
+    "asset": "ab-av1-v0.11.2-x86_64-unknown-linux-musl.tar.zst",
+    "sha256": ""
+  },
+  "gdown": { "version": "5.2.0" }
+}

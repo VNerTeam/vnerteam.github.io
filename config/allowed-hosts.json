@@ -1,0 +1,4 @@
+{
+  "_ghi_chu": "Allowlist cho provider direct_url. Mỗi mục: {\"host\": \"cdn.example.com\", \"allow_query\": false}. host khớp chính xác hoặc dạng \"*.r2.dev\" (chỉ tên miền con).",
+  "hosts": []
+}

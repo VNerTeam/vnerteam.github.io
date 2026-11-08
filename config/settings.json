@@ -1,0 +1,14 @@
+{
+  "runner_label": "ubuntu-latest",
+  "max_parallel": 2,
+  "max_items_per_run": 6,
+  "max_items_per_day": 12,
+  "time_budget_min": 270,
+  "reserve_min": 20,
+  "max_input_gb": 6,
+  "min_vmaf_floor": 88,
+  "free_disk_space": false,
+  "timezone": "Asia/Ho_Chi_Minh",
+  "max_attempts": 3,
+  "max_chain": 30
+}

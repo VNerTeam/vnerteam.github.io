@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- connect-src: nếu Worker dùng tên miền riêng, thay https://*.workers.dev bằng đúng địa chỉ Worker -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src https://*.workers.dev; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<title>Nén video</title>
+<style>
+:root{--bg:#e9eef0;--surface:#f7f9fa;--ink:#12202a;--mute:#566872;--line:#c5d0d5;--accent:#0b6e6e;--on-accent:#fff;--warn:#9a5b00;--bad:#a3261e;--ok:#1d6b3a;--soft:#dde6e9}
+@media (prefers-color-scheme:dark){:root{--bg:#0f171c;--surface:#172229;--ink:#e4ecef;--mute:#93a6ae;--line:#2a3a43;--accent:#5cc8c4;--on-accent:#06201f;--warn:#e0a84a;--bad:#ff8f86;--ok:#7bd69a;--soft:#1f2d35}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 96px}
+h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:700;letter-spacing:-.01em;margin:0}
+h1{font-size:2rem}h2{font-size:1.3rem;margin-bottom:10px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:20px}
+header p{margin:4px 0 0;color:var(--mute);max-width:52ch}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+textarea,input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;max-width:100%}
+textarea{width:100%;min-height:92px;resize:vertical}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:6px;padding:8px 14px}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+button.danger{color:var(--bad)}
+button:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grow{flex:1}
+.muted{color:var(--mute);font-size:.9rem}
+.badge{display:inline-block;font-size:.8rem;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--soft);border:1px solid var(--line)}
+.badge.exp{color:var(--warn);border-color:var(--warn)}
+.item{border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:8px;padding:10px 12px;margin-top:10px;background:var(--bg)}
+.item.failed{border-left-color:var(--bad)}.item.err{border-left-color:var(--warn)}
+.item .ref{word-break:break-all}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chips span{font-size:.8rem;color:var(--mute);background:var(--soft);padding:1px 8px;border-radius:4px}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}
+.opts label{display:flex;flex-direction:column;font-size:.8rem;color:var(--mute);gap:2px}
+.msg{margin:8px 0 0;font-size:.9rem}.msg.bad{color:var(--bad)}.msg.warn{color:var(--warn)}.msg.ok{color:var(--ok)}
+details summary{cursor:pointer;color:var(--accent);margin-top:6px}
+#lock{max-width:420px;margin:12vh auto}
+#savebar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px;display:none}
+#savebar .in{max-width:860px;margin:0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between}
+a{color:var(--accent)}
+.sr{position:absolute;left:-9999px}
+@media (prefers-reduced-motion:no-preference){.item{transition:border-color .2s}}
+</style>
+</head>
+<body>
+<main id="lock" hidden>
+  <h1>Nén video</h1>
+  <p class="muted">Trang cá nhân. Nhập password để quản lý hàng đợi.</p>
+  <section>
+    <label for="pw" class="muted">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" style="width:100%;margin:6px 0 10px">
+    <label class="row muted"><input id="remember" type="checkbox" checked> Ghi nhớ trên thiết bị này</label>
+    <div class="row" style="margin-top:12px"><button id="login" class="primary">Mở khóa</button></div>
+    <p id="lockmsg" class="msg" role="alert"></p>
+  </section>
+</main>
+
+<main id="app" hidden>
+  <header>
+    <div>
+      <h1>Nén video</h1>
+      <p>Dán link, chọn mức nén, lưu vào hàng đợi. GitHub Actions sẽ nén và đưa kết quả lên Release.</p>
+    </div>
+    <button id="logout">Đăng xuất</button>
+  </header>
+
+  <section>
+    <h2>Thêm link</h2>
+    <label for="links" class="sr">Link video, mỗi dòng một link</label>
+    <textarea id="links" placeholder="Mỗi dòng một link (Google Drive, Dropbox, pCloud, GitHub, Hugging Face, Internet Archive…)" spellcheck="false"></textarea>
+    <div id="preview"></div>
+    <details id="defaults"><summary>Tuỳ chọn cho mục mới</summary><div id="defopts"></div>
+      <div class="row" style="margin-top:8px"><button id="applyall">Áp dụng cho tất cả nháp</button></div></details>
+    <div class="row" style="margin-top:10px"><button id="adddraft" class="primary">Thêm vào nháp</button></div>
+  </section>
+
+  <section>
+    <h2>Nháp <span id="draftcount" class="muted"></span></h2>
+    <p class="muted" style="margin-top:0">Nháp chỉ nằm trong trình duyệt này. Bấm "Lưu vào hàng đợi" mới gửi đi.</p>
+    <div id="drafts"></div>
+    <div id="saveresult"></div>
+  </section>
+
+  <section>
+    <div class="row"><h2 class="grow">Hàng đợi</h2><button id="refresh">Làm mới</button><button id="runnow" class="primary">Chạy ngay</button></div>
+    <p id="qsummary" class="muted"></p>
+    <div id="queue"></div>
+    <p id="qmsg" class="msg" role="status"></p>
+  </section>
+
+  <section>
+    <div class="row"><h2 class="grow">Trạng thái</h2><button id="refstatus">Làm mới</button></div>
+    <div id="runs"></div>
+    <h2 style="margin-top:16px">Video đã nén</h2>
+    <div id="releases"></div>
+  </section>
+</main>
+
+<div id="savebar"><div class="in"><span id="savetext"></span><button id="save" class="primary">Lưu vào hàng đợi</button></div></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

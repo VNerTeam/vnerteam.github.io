@@ -1,0 +1,33 @@
+{
+  "resolutions": {
+    "original": { "height": null },
+    "hd": { "height": 720 },
+    "fhd": { "height": 1080 },
+    "2k": { "height": 1440 },
+    "4k": { "height": 2160 }
+  },
+  "qualities": {
+    "good": { "min_vmaf": 96, "svtav1_preset": 6, "x265_preset": "slow" },
+    "balanced": { "min_vmaf": 95, "svtav1_preset": 8, "x265_preset": "medium" },
+    "strong": { "min_vmaf": 92, "svtav1_preset": 8, "x265_preset": "medium" }
+  },
+  "ladder": {
+    "av1": [
+      { "encoder": "libsvtav1", "preset": "@quality" },
+      { "encoder": "libsvtav1", "preset": 10 },
+      { "encoder": "libsvtav1", "preset": 12 },
+      { "encoder": "libx265", "preset": "medium" },
+      { "encoder": "libx265", "preset": "fast" }
+    ],
+    "hevc": [
+      { "encoder": "libx265", "preset": "@quality" },
+      { "encoder": "libx265", "preset": "fast" },
+      { "encoder": "libx265", "preset": "veryfast" }
+    ]
+  },
+  "audio": {
+    "opus_96": { "codec": "libopus", "kbps": 96 },
+    "opus_128": { "codec": "libopus", "kbps": 128 },
+    "aac_128": { "codec": "aac", "kbps": 128 }
+  }
+}

@@ -1,0 +1,134 @@
+name: Nén video theo hàng đợi
+
+# Chỉ chủ repo dùng. Không dùng pull_request / pull_request_target / issues / fork.
+# Nếu nhánh mặc định không phải "main", sửa dòng branches bên dưới.
+on:
+  push:
+    branches: [main]
+    paths: [queue.json]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Chế độ chạy"
+        type: choice
+        options: [process, retry_failed, dry_run]
+        default: process
+      only_id:
+        description: "Chỉ xử lý mục có id này (tuỳ chọn)"
+        type: string
+        required: false
+        default: ""
+      chain:
+        description: "Đếm số lần tự gọi lại (không cần nhập)"
+        type: string
+        required: false
+        default: "0"
+
+concurrency:
+  group: compress-queue
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  plan:
+    # github.actor là chủ repo (push bằng PAT qua Worker, bấm chạy tay) hoặc github-actions[bot] (tự gọi lại).
+    # Repo của tổ chức: actor là người dùng, không phải tổ chức → xem README.
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.actor == github.repository_owner || github.actor == 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      has_items: ${{ steps.plan.outputs.has_items }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      runner: ${{ steps.plan.outputs.runner }}
+      max_parallel: ${{ steps.plan.outputs.max_parallel }}
+      free_disk: ${{ steps.plan.outputs.free_disk }}
+      invalid: ${{ steps.plan.outputs.invalid }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: plan
+        run: node scripts/plan.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          ONLY_ID: ${{ inputs.only_id }}
+
+  compress:
+    needs: plan
+    if: needs.plan.outputs.has_items == 'true'
+    runs-on: ${{ fromJSON(needs.plan.outputs.runner) }}
+    timeout-minutes: 330
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan.outputs.max_parallel) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Ghi mốc thời gian bắt đầu job
+        run: echo "JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+      - name: Dọn bớt phần mềm cài sẵn (tuỳ chọn)
+        if: needs.plan.outputs.free_disk == 'true'
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+      - name: Cache công cụ
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/tools
+            ~/.cache/pip
+          key: tools-${{ runner.os }}-${{ hashFiles('config/tools.json') }}
+      - name: Cài và kiểm tra công cụ
+        run: bash scripts/setup-tools.sh
+      - name: Nén mục ${{ matrix.id }}
+        run: node scripts/process-item.mjs
+        env:
+          ITEM_JSON: ${{ toJSON(matrix.item) }}
+      - name: Lưu kết quả
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: result-${{ matrix.id }}
+          path: results/result-${{ matrix.id }}.json
+          if-no-files-found: ignore
+          retention-days: 1
+      - name: Dọn thư mục tạm (lớp phòng thủ thứ hai) và kiểm tra
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP"/item-* "$HOME/.cache/gdown"
+          if ls -d "$RUNNER_TEMP"/item-* >/dev/null 2>&1; then echo "::warning::Vẫn còn thư mục item-* chưa dọn"; else echo "Đã dọn sạch thư mục item-*"; fi
+
+  finalize:
+    needs: [plan, compress]
+    if: always() && needs.plan.result == 'success' && (needs.plan.outputs.has_items == 'true' || needs.plan.outputs.invalid != '[]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: result-*
+          merge-multiple: true
+          path: results
+      - name: Cập nhật hàng đợi
+        run: node scripts/finalize.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PLAN_MATRIX: ${{ needs.plan.outputs.matrix }}
+          PLAN_INVALID: ${{ needs.plan.outputs.invalid }}
+          MODE: ${{ inputs.mode }}
+          CHAIN: ${{ inputs.chain }}

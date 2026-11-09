@@ -1,0 +1,14 @@
+name = "video-compress-gateway"
+main = "src/index.mjs"
+compatibility_date = "2026-10-01"
+
+[vars]
+GH_OWNER = "TEN-TAI-KHOAN-GITHUB"        # điền: tên tài khoản chủ repo
+GH_REPO = "TEN-REPO"                     # điền: tên repo
+GH_BRANCH = "main"
+WORKFLOW_FILE = "compress.yml"
+ALLOWED_ORIGIN = "https://TEN-TAI-KHOAN-GITHUB.github.io"  # chỉ gồm scheme + host, không có đường dẫn
+
+[[kv_namespaces]]
+binding = "RATE"
+id = "DIEN-ID-KV-SAU-KHI-TAO"            # wrangler kv namespace create RATE

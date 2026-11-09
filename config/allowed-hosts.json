@@ -1,6 +1,158 @@
 {
   "_ghi_chu": "Allowlist cho provider direct_url. Mỗi mục: {\"host\": \"cdn.example.com\", \"allow_query\": false}. host khớp chính xác hoặc dạng \"*.r2.dev\" (chỉ tên miền con).",
   "hosts": [
-    { "host": "rule34video.com", "allow_query": true }
+    { 
+      "host": "rule34video.com", 
+      "allow_query": true },
+    {
+      "host": "youtube.com",
+      "allow_query": true,
+      "ytdlp": true
+    },
+    {
+      "host": "www.youtube.com",
+      "allow_query": true,
+      "ytdlp": true
+    },
+    {
+      "host": "m.youtube.com",
+      "allow_query": true,
+      "ytdlp": true
+    },
+    {
+      "host": "youtu.be",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "vimeo.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.vimeo.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "player.vimeo.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "dailymotion.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.dailymotion.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "dai.ly",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "facebook.com",
+      "allow_query": true,
+      "ytdlp": true
+    },
+    {
+      "host": "www.facebook.com",
+      "allow_query": true,
+      "ytdlp": true
+    },
+    {
+      "host": "m.facebook.com",
+      "allow_query": true,
+      "ytdlp": true
+    },
+    {
+      "host": "fb.watch",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "twitter.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.twitter.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "x.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.x.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "tiktok.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.tiktok.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "vm.tiktok.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "reddit.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.reddit.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "bilibili.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.bilibili.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "twitch.tv",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.twitch.tv",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "streamable.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "rumble.com",
+      "allow_query": false,
+      "ytdlp": true
+    },
+    {
+      "host": "www.rumble.com",
+      "allow_query": false,
+      "ytdlp": true
+    }
   ]
 }

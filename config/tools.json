@@ -13,5 +13,13 @@
     "asset": "ab-av1-v0.11.2-x86_64-unknown-linux-musl.tar.zst",
     "sha256": ""
   },
-  "gdown": { "version": "5.2.0" }
+  "gdown": {
+    "version": "5.2.0"
+  },
+  "yt_dlp": {
+    "repo": "yt-dlp/yt-dlp",
+    "tag": "2026.10.26",
+    "asset": "yt-dlp_linux",
+    "sha256": ""
+  }
 }

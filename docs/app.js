@@ -37,6 +37,8 @@ const ERROR_TEXT = {
   upload_failed: 'Upload lên Release không được xác nhận.',
   release_failed: 'Không tạo được Release.',
   download_failed: 'Tải file nguồn thất bại.',
+  ytdlp_unsupported: 'yt-dlp không hỗ trợ trang này (đã thử cả bản mới nhất).',
+  drm_protected: 'Video có bảo vệ DRM, không tải được.',
 };
 const errText = (c) => (c && c.startsWith('invalid_schema') ? 'Mục sai định dạng nên bị bỏ qua.' : ERROR_TEXT[c] || c || '');
 

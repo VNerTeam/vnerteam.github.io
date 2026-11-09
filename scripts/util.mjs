@@ -9,7 +9,7 @@ const execFileP = promisify(execFile);
 
 export const DEFAULT_SETTINGS = {
   runner_label: 'ubuntu-latest', max_parallel: 2, max_items_per_run: 10, max_items_per_day: 10, time_budget_min: 270, reserve_min: 20,
-  max_input_gb: 6, min_vmaf_floor: 88, free_disk_space: false, timezone: 'Asia/Ho_Chi_Minh', max_attempts: 3, max_chain: 30,
+  max_input_gb: 6, min_vmaf_floor: 88, free_disk_space: false, timezone: 'Asia/Ho_Chi_Minh', max_attempts: 3, max_chain: 30, ytdlp_update_channel: 'stable',
 };
 
 export const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));

@@ -231,6 +231,80 @@ async function download(plan, dest, maxBytes, timeoutMs) {
   }
 }
 
+
+// ---------- yt-dlp (trang không có link tải thẳng) ----------
+let ytdlpBin = 'yt-dlp';
+const YTDLP_RETRY = ['download_failed', 'ytdlp_unsupported', 'access_denied']; // lỗi có thể do bản yt-dlp đã cũ
+function classifyYtdlp(t) {
+  if (/unsupported url/i.test(t)) return ['ytdlp_unsupported', 'yt-dlp không hỗ trợ trang này.'];
+  if (/drm/i.test(t)) return ['drm_protected', 'Video có bảo vệ DRM, không tải được.'];
+  if (/larger than max-filesize|larger than --max-filesize/i.test(t)) return ['input_too_big', `File nguồn lớn hơn ${settings.max_input_gb} GB.`];
+  if (/http error 429|too many requests/i.test(t)) return ['rate_limited', 'Trang đang giới hạn tốc độ, thử lại sau.'];
+  if (/private video|sign in|log ?in required|members-only|not a bot|age-restricted|http error 40[13]|forbidden/i.test(t)) return ['access_denied', 'Trang không cho tải (riêng tư, cần đăng nhập hoặc bị chặn).'];
+  if (/http error 404|video unavailable|has been removed|does not exist|not found/i.test(t)) return ['not_found', 'Video không còn tồn tại.'];
+  const last = t.split('\n').filter((x) => /^ERROR/i.test(x)).slice(-1)[0] || t.trim().split('\n').slice(-1)[0] || '';
+  return ['download_failed', `yt-dlp lỗi: ${last.slice(0, 160)}`];
+}
+async function ytdlpVersion(bin) {
+  return (await run(bin, ['--version'])).stdout.trim();
+}
+// Tải bản yt-dlp mới nhất (stable hoặc nightly theo settings) vào thư mục tạm của mục. Trả về đường dẫn hoặc null nếu không mới hơn.
+async function updateYtdlp() {
+  const repo = settings.ytdlp_update_channel === 'nightly' ? 'yt-dlp/yt-dlp-nightly-builds' : 'yt-dlp/yt-dlp';
+  const dir = path.join(workDir, 'ytdlp-latest');
+  const r = await gh(['release', 'download', '--repo', repo, '--pattern', 'yt-dlp_linux', '--dir', dir, '--clobber']);
+  const bin = path.join(dir, 'yt-dlp_linux');
+  if (r.code !== 0 || !fs.existsSync(bin)) {
+    log(`Không tải được yt-dlp mới nhất: ${r.stderr.slice(0, 160)}`);
+    return null;
+  }
+  fs.chmodSync(bin, 0o755);
+  const [oldV, newV] = [await ytdlpVersion(ytdlpBin), await ytdlpVersion(bin)];
+  if (!newV || oldV === newV) {
+    log(`yt-dlp đã là bản mới nhất (${oldV}), không có gì để cập nhật.`);
+    return null;
+  }
+  log(`::warning::yt-dlp ${oldV} đã cũ, dùng bản mới nhất ${newV}. Hãy cập nhật yt_dlp.tag trong config/tools.json.`);
+  result.ytdlp_updated_to = newV;
+  return bin;
+}
+async function ytdlpOnce(plan, dir, maxBytes) {
+  const timeoutMs = Math.min(budgetMs(), hardMs() - 10 * 60000);
+  if (timeoutMs < 60000) throw new Fail('timeout', 'Không còn đủ thời gian để tải.');
+  const titleFile = path.join(dir, 'title.txt');
+  const args = ['--ignore-config', '--no-playlist', '--no-cache-dir', '--no-mtime', '--no-progress', '--socket-timeout', '30', '--retries', '5', '--fragment-retries', '5',
+    '--js-runtimes', 'node', '-f', 'bv*+ba/b', '--merge-output-format', 'mkv', '--max-filesize', String(maxBytes), '--print-to-file', '%(title)s', titleFile,
+    '-o', path.join(dir, 'input.%(ext)s'), '--', plan.url];
+  const r = await spawnStream(ytdlpBin, args, { timeoutMs, onLine: (l) => /^(ERROR|WARNING)/.test(l) && log(`  yt-dlp: ${l.slice(0, 200)}`) });
+  if (r.timedOut) throw new Fail('timeout', 'Hết thời gian khi tải.');
+  const text = `${r.stdout}\n${r.stderr}`;
+  const files = fs.readdirSync(dir).filter((f) => f.startsWith('input.') && !/\.(part|ytdl|temp)$/.test(f));
+  const pick = files.includes('input.mkv') ? 'input.mkv' : files.sort((a, b) => fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size)[0];
+  if (r.code !== 0 || !pick) {
+    const [code, message] = classifyYtdlp(text);
+    return { ok: false, code, message };
+  }
+  let title = null;
+  try {
+    title = fs.readFileSync(titleFile, 'utf8').split('\n')[0].trim().slice(0, 80) || null;
+  } catch { /* không có tiêu đề */ }
+  return { ok: true, file: path.join(dir, pick), title };
+}
+async function downloadYtdlp(plan, dir, maxBytes) {
+  let a = await ytdlpOnce(plan, dir, maxBytes);
+  if (!a.ok && YTDLP_RETRY.includes(a.code)) {
+    log(`Tải lỗi (${a.code}). Thử cập nhật yt-dlp lên bản mới nhất rồi tải lại…`);
+    const nb = await updateYtdlp();
+    if (nb) {
+      ytdlpBin = nb;
+      for (const f of fs.readdirSync(dir)) if (f.startsWith('input.')) fs.rmSync(path.join(dir, f), { force: true });
+      a = await ytdlpOnce(plan, dir, maxBytes);
+    }
+  }
+  if (!a.ok) throw new Fail(a.code, a.message);
+  return a;
+}
+
 // ---------- release ----------
 async function findExistingRelease(hash6) {
   const r = await gh(['release', 'list', '--repo', REPO, '--limit', '300', '--json', 'tagName,isDraft']);
@@ -292,6 +366,7 @@ async function publishRelease({ id, assetPath, assetName, title, notes, sha, siz
 }
 
 // ---------- luồng chính ----------
+let ytdlpVer = null;
 async function processItem(item) {
   const opt = item.options;
   const q = profiles.qualities[opt.quality];
@@ -325,9 +400,14 @@ async function processItem(item) {
   if (free < need) throw new Fail('no_disk', `Đĩa trống ${fmtBytes(free)}, cần ít nhất ${fmtBytes(need)}. Bật free_disk_space hoặc giảm max_input_gb.`);
 
   // tải
-  const raw = path.join(workDir, 'input.bin');
+  let raw = path.join(workDir, 'input.bin');
   const dlStart = Date.now();
-  await download(plan0, raw, remote ? null : maxIn, Math.min(budgetMs(), hardMs() - 10 * 60000));
+  if (plan0.kind === 'ytdlp') {
+    const y = await downloadYtdlp(plan0, workDir, maxIn);
+    raw = y.file;
+    plan0.nameHint = y.title;
+    ytdlpVer = await ytdlpVersion(ytdlpBin);
+  } else await download(plan0, raw, remote ? null : maxIn, Math.min(budgetMs(), hardMs() - 10 * 60000));
   const inSize = fs.statSync(raw).size;
   if (inSize > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(inSize)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);
   const hc = headCheck(fileHead(raw));
@@ -417,7 +497,7 @@ async function processItem(item) {
     `| VMAF mục tiêu / dự đoán | ≥ ${minVmaf} / ${search.vmaf} |`,
     `| Mức / preset | ${Q_LABEL[opt.quality]} / ${step.preset} |`,
     `| Thời gian nén | ${fmtDur((Date.now() - encStart) / 1000)} |`,
-    `| Phiên bản | ${toolVer.ffmpeg}; ab-av1 ${toolVer.abav1} |`,
+    `| Phiên bản | ${toolVer.ffmpeg}; ab-av1 ${toolVer.abav1}${ytdlpVer ? `; yt-dlp ${ytdlpVer}` : ''} |`,
     `| Thời điểm | ${at} |`,
     `| Nguồn | ${PROVIDERS[item.provider].label} |`,
     `| SHA256 | \`${sha}\` |`,

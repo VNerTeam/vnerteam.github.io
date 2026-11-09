@@ -16,6 +16,7 @@ AB_TAG="$(cfg ab_av1.tag)"; AB_ASSET="$(cfg ab_av1.asset)"; AB_REPO="$(cfg ab_av
 GDOWN_VER="$(cfg gdown.version)"
 FF_FB_TAG="$(cfg ffmpeg.fallback_tag)"; FF_FB_ASSET="$(cfg ffmpeg.fallback_asset)"
 FF_SHA="$(cfg ffmpeg.sha256)"; AB_SHA="$(cfg ab_av1.sha256)"
+YT_REPO="$(cfg yt_dlp.repo)"; YT_TAG="$(cfg yt_dlp.tag)"; YT_ASSET="$(cfg yt_dlp.asset)"; YT_SHA="$(cfg yt_dlp.sha256)"
 MARK="$TOOLS_DIR/.ok-$(sha256sum config/tools.json | cut -c1-12)"
 
 if [ ! -f "$MARK" ]; then
@@ -41,6 +42,14 @@ if [ ! -f "$MARK" ]; then
   command -v zstd >/dev/null || sudo apt-get install -y -qq zstd
   tar --zstd -xf "$AB_ASSET"
   cp "$(find . -type f -name ab-av1 | head -n1)" "$BIN/ab-av1"
+  echo "== yt-dlp $YT_TAG"
+  if ! gh release download "$YT_TAG" --repo "$YT_REPO" --pattern "$YT_ASSET" 2>/dev/null; then
+    echo "::warning::Tag yt-dlp $YT_TAG không tải được. Dùng bản mới nhất. Hãy cập nhật config/tools.json."
+    gh release download --repo "$YT_REPO" --pattern "$YT_ASSET"
+  else
+    verify_sha "$YT_ASSET" "$YT_SHA"
+  fi
+  cp "$YT_ASSET" "$BIN/yt-dlp"
   chmod +x "$BIN"/*
   cd "$TOOLS_DIR" && rm -rf dl && touch "$MARK"
 fi
@@ -68,6 +77,7 @@ fi
 command -v ffprobe >/dev/null || { echo "::error::Thiếu ffprobe"; exit 1; }
 ab-av1 --version || { echo "::error::ab-av1 không chạy được"; exit 1; }
 gdown --version || { echo "::error::gdown không chạy được"; exit 1; }
+yt-dlp --version || { echo "::error::yt-dlp không chạy được"; exit 1; }
 ffmpeg -hide_banner -version | head -n1
 # Lưu --help của đúng phiên bản đã ghim để đối chiếu cờ khi có lỗi
 for c in crf-search encode; do ab-av1 "$c" --help > "$TOOLS_DIR/help-$c.txt" 2>&1 || true; done

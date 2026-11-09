@@ -12,6 +12,7 @@ export const PROVIDERS = {
   huggingface: { label: 'Hugging Face', experimental: false },
   internet_archive: { label: 'Internet Archive', experimental: false },
   direct_url: { label: 'Link trực tiếp', experimental: false },
+  ytdlp: { label: 'Trang video (yt-dlp)', experimental: true },
   onedrive: { label: 'OneDrive (cá nhân)', experimental: true },
 };
 export const PROVIDER_IDS = Object.keys(PROVIDERS);
@@ -82,6 +83,22 @@ export function matchAllowedHost(host, list) {
   return null;
 }
 
+// direct_url và ytdlp dùng chung: host phải nằm trong allowlist; cờ "ytdlp": true quyết định loại.
+function webRef(r, ctx, wantYtdlp) {
+  exact(r, ['host', 'path', 'query']);
+  need(RE.host, r.host, 'Máy chủ');
+  if (typeof r.path !== 'string' || r.path.length > 1500 || !RE.dpath.test(r.path) || r.path.includes('..') || r.path.includes('//')) {
+    bad('bad_ref', 'Đường dẫn không hợp lệ.');
+  }
+  const entry = matchAllowedHost(r.host, ctx && ctx.allowedHosts);
+  if (!entry) bad('host_not_allowed', 'Máy chủ này chưa nằm trong config/allowed-hosts.json.');
+  if ((entry.ytdlp === true) !== wantYtdlp) bad('host_not_allowed', wantYtdlp ? 'Máy chủ này chưa bật "ytdlp": true trong config/allowed-hosts.json.' : 'Máy chủ này được cấu hình cho yt-dlp, không phải link tải trực tiếp.');
+  if (r.query !== null) {
+    if (!entry.allow_query) bad('query_not_allowed', 'Máy chủ này không cho phép tham số sau dấu ?.');
+    if (typeof r.query !== 'string' || r.query.length > 1500 || !RE.dquery.test(r.query) || r.query.includes('..')) bad('bad_ref', 'Tham số không hợp lệ.');
+  }
+}
+
 const CHECKS = {
   github_release(r) {
     exact(r, ['owner', 'repo', 'tag', 'asset']);
@@ -132,17 +149,10 @@ const CHECKS = {
     pathOf(r.file, 'Tên file');
   },
   direct_url(r, ctx) {
-    exact(r, ['host', 'path', 'query']);
-    need(RE.host, r.host, 'Máy chủ');
-    if (typeof r.path !== 'string' || r.path.length > 1500 || !RE.dpath.test(r.path) || r.path.includes('..') || r.path.includes('//')) {
-      bad('bad_ref', 'Đường dẫn không hợp lệ.');
-    }
-    const entry = matchAllowedHost(r.host, ctx && ctx.allowedHosts);
-    if (!entry) bad('host_not_allowed', 'Máy chủ này chưa nằm trong config/allowed-hosts.json.');
-    if (r.query !== null) {
-      if (!entry.allow_query) bad('query_not_allowed', 'Máy chủ này không cho phép tham số sau dấu ?.');
-      if (typeof r.query !== 'string' || r.query.length > 1500 || !RE.dquery.test(r.query) || r.query.includes('..')) bad('bad_ref', 'Tham số không hợp lệ.');
-    }
+    webRef(r, ctx, false);
+  },
+  ytdlp(r, ctx) {
+    webRef(r, ctx, true);
   },
   onedrive(r) {
     if (r && r.kind === 'short') {
@@ -336,7 +346,8 @@ export function summarize(provider, r) {
     case 'pcloud': return `mã …${r.code.slice(-6)}`;
     case 'huggingface': return cut(`${r.repo} • ${r.path}`);
     case 'internet_archive': return cut(`${r.identifier} • ${r.file}`);
-    case 'direct_url': return cut(`${r.host}${r.path}`);
+    case 'direct_url':
+    case 'ytdlp': return cut(`${r.host}${r.path}`);
     case 'onedrive': return r.kind === 'short' ? cut(`1drv.ms${r.path}`) : `resid …${r.resid.slice(-6)}`;
     default: return '';
   }
@@ -354,8 +365,8 @@ export function parseLink(raw, { allowedHosts = [] } = {}) {
       const entry = matchAllowedHost(c.host, allowedHosts);
       if (!entry) bad('host_not_allowed', `Máy chủ ${c.host} chưa được hỗ trợ. Nếu là máy chủ của bạn, hãy thêm vào config/allowed-hosts.json.`);
       const query = c.u.search ? c.u.search.slice(1) : null;
-      if (query && !entry.allow_query) bad('query_not_allowed', 'Link có tham số sau dấu ? (thường là link ký sẵn, sẽ hết hạn). Máy chủ này không bật allow_query.');
-      found = { provider: 'direct_url', ref: { host: c.host, path: c.u.pathname, query } };
+      if (query && !entry.allow_query) bad('query_not_allowed', 'Link có tham số sau dấu ? (với link tải trực tiếp thường là link ký sẵn, sẽ hết hạn). Máy chủ này không bật allow_query.');
+      found = { provider: entry.ytdlp === true ? 'ytdlp' : 'direct_url', ref: { host: c.host, path: c.u.pathname, query } };
     }
     CHECKS[found.provider](found.ref, { allowedHosts });
     const meta = PROVIDERS[found.provider];

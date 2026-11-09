@@ -159,6 +159,7 @@ export const RESOLVERS = {
   },
   internet_archive: async (r) => http(`https://archive.org/download/${e(r.identifier)}/${encPath(r.file)}`, base(r.file)),
   direct_url: async (r) => http(`https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, base(decodeURIComponent(r.path))),
+  ytdlp: async (r) => ({ kind: 'ytdlp', url: `https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, nameHint: null }),
   onedrive: resolveOnedrive,
 };
 
@@ -166,12 +167,12 @@ export async function resolve(provider, ref) {
   const fn = RESOLVERS[provider];
   if (!fn) throw new Fail('unsupported', `Provider ${provider} chưa có resolver.`);
   const out = await fn(ref);
-  if (out.kind === 'http' && !out.url.startsWith('https://')) throw new Fail('resolve_failed', 'Link tải không phải https.');
+  if (out.kind !== 'gdown' && !out.url.startsWith('https://')) throw new Fail('resolve_failed', 'Link tải không phải https.');
   return out;
 }
 
 // Các giá trị bí mật cần che trong log công khai
-const SECRET_KEYS = { gdrive: ['id', 'resourcekey'], dropbox: ['rlkey'], pcloud: ['code'], onedrive: ['path', 'resid', 'authkey'], direct_url: ['query'] };
+const SECRET_KEYS = { gdrive: ['id', 'resourcekey'], dropbox: ['rlkey'], pcloud: ['code'], onedrive: ['path', 'resid', 'authkey'], direct_url: ['query'], ytdlp: ['path', 'query'] };
 export function secretsOf(provider, ref) {
   return (SECRET_KEYS[provider] || []).map((k) => ref[k]).filter((v) => typeof v === 'string' && v.length >= 4);
 }

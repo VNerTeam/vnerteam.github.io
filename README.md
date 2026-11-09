@@ -42,6 +42,7 @@ Kiểm thử: `node --test "tests/*.test.mjs" "worker/test/*.test.mjs"` (Node �
 | Hugging Face | Ổn định | Repo public |
 | Internet Archive | Ổn định | `archive.org/download/<id>/<file>` |
 | Link trực tiếp | Ổn định | Chỉ host trong `config/allowed-hosts.json` |
+| Trang video (yt-dlp) | **Thử nghiệm** | Trang không có link tải thẳng; chỉ host bật `"ytdlp": true` trong `config/allowed-hosts.json` |
 | OneDrive cá nhân | **Thử nghiệm** | Thử 3 cách, có thể thất bại → `onedrive_unsupported` |
 
 Từ chối ngay: không phải https, có `user:pass@`, host là IP, cổng lạ, thư mục/trang xem, `ref` chứa `..`. Hệ thống **chỉ lưu `ref`, không lưu URL gốc**.
@@ -50,6 +51,19 @@ Từ chối ngay: không phải https, có `user:pass@`, host là IP, cổng l�
 1. `docs/lib/providers.mjs`: thêm vào `PROVIDERS`, thêm 1 matcher vào `MATCHERS`, 1 hàm kiểm tra vào `CHECKS`.
 2. `scripts/resolvers.mjs`: thêm entry vào `RESOLVERS` (và khoá bí mật vào `SECRET_KEYS` nếu có).
 3. Thêm ≥ 3 link hợp lệ và ≥ 3 link bị từ chối vào `tests/providers.test.mjs`.
+
+### yt-dlp (trang không có link tải thẳng)
+
+Bật cho từng trang trong `config/allowed-hosts.json` bằng cờ `"ytdlp": true`:
+```json
+{ "hosts": [ { "host": "www.example-video.com", "allow_query": true, "ytdlp": true } ] }
+```
+- Chỉ các host trong danh sách mới được gửi cho yt-dlp (chống lạm dụng/SSRF). `allow_query` thường cần `true` vì nhiều trang dùng `?v=...`; phần `?...` sẽ được lưu công khai trong `queue.json`.
+- yt-dlp được ghim phiên bản trong `config/tools.json` (`yt_dlp`, bản dựng sẵn `yt-dlp_linux`), tải từ nguồn gốc và cache giống ffmpeg.
+- **Tự cập nhật khi lỗi:** nếu tải lỗi (`download_failed`, `ytdlp_unsupported`, `access_denied`), job tải yt-dlp bản **mới nhất** rồi tải lại đúng một lần và ghi cảnh báo để bạn cập nhật `yt_dlp.tag`. Nếu bản mới nhất trùng bản đang dùng thì không thử lại vô ích. Đặt `"ytdlp_update_channel": "nightly"` trong `config/settings.json` để lấy bản nightly (sửa lỗi trang web sớm hơn).
+- Với YouTube, yt-dlp cần runtime JavaScript; workflow dùng Node có sẵn trên runner (`--js-runtimes node`).
+- Không tải playlist (`--no-playlist`), không dùng cookie, không vượt DRM. Video có DRM báo `drm_protected`.
+- **Lưu ý pháp lý:** tải từ trang web có thể vi phạm điều khoản của trang đó, và việc đăng lên release công khai làm rủi ro về bản quyền cao hơn. Chỉ dùng cho video bạn có quyền tải và phân phối. Tên file/tiêu đề release lấy từ tiêu đề video nếu bạn không đặt tên hiển thị, nên hãy đặt tên riêng nếu tiêu đề gốc không nên công khai.
 
 ### allowed-hosts.json
 ```json
@@ -78,6 +92,7 @@ BtbN giữ bản cuối mỗi tháng trong 2 năm và 14 bản daily gần nhấ
 | `not_direct_video`, `not_a_video` | Link không phải file video | Kiểm tra link |
 | `lfs_pointer` | Con trỏ Git LFS | Dùng link release |
 | `not_found`, `access_denied`, `rate_limited` | Lỗi từ nguồn | Kiểm tra link/quyền, thử lại sau |
+| `ytdlp_unsupported`, `drm_protected` | yt-dlp không hỗ trợ trang, hoặc video có DRM | Thử `ytdlp_update_channel: nightly`; DRM thì không tải được |
 | `input_too_big`, `no_disk` | Vượt `max_input_gb` hoặc hết đĩa | Tăng giới hạn, bật `free_disk_space`, hoặc self-hosted |
 | `too_long` | Hết ladder tốc độ vẫn vượt ngân sách | Dùng self-hosted hoặc chia nhỏ video |
 | `timeout` | Hết thời gian | Bấm "Thử lại" (lần sau bắt đầu ở nấc nhanh hơn) |
@@ -105,4 +120,4 @@ Mục `failed` **không tự chạy lại**; bấm "Thử lại" trên trang ho�
 - Release được tạo ở dạng **draft**, upload và xác nhận xong mới công khai (không có release dở dang); nếu có `digest` SHA256 trên API thì đối chiếu thêm.
 - Vòng tự gọi lại bị chặn bởi hạn mức ngày và `max_chain` (mặc định 30).
 - Đầu ra video luôn là 10-bit 4:2:0 (nguồn 4:2:2/4:4:4 bị đổi về 4:2:0, có ghi chú trong release); chỉ lấy luồng video chính đầu tiên.
-- Giai đoạn 2 (chưa làm, đã chừa chỗ): chia video thành đoạn nén song song, hàng đợi riêng tư bằng repository variable (`QUEUE_BACKEND`), MEGA/Wistia/HLS, thông báo khi xong.
+- Giai đoạn 2 (chưa làm, đã chừa chỗ): chia video thành đoạn nén song song, hàng đợi riêng tư bằng repository variable (`QUEUE_BACKEND`), MEGA/Wistia (yt-dlp có thể xử lý HLS/streaming ở những trang bạn bật), thông báo khi xong.

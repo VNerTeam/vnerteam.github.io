@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLink, validateRef, PROVIDER_IDS, matchAllowedHost } from '../docs/lib/providers.mjs';
 
-const allowedHosts = [{ host: 'cdn.example.com', allow_query: false }, { host: '*.r2.dev', allow_query: false }, { host: 'files.mysite.io', allow_query: true }];
+const allowedHosts = [{ host: 'cdn.example.com', allow_query: false }, { host: '*.r2.dev', allow_query: false }, { host: 'files.mysite.io', allow_query: true },
+  { host: 'video.example.org', allow_query: false, ytdlp: true }, { host: '*.media.example', allow_query: true, ytdlp: true }, { host: 'watch.example.net', allow_query: true, ytdlp: true }];
 const ID = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345';
 
 // [provider, [link hợp lệ...], [link bị từ chối...]]
@@ -38,6 +39,10 @@ const CASES = {
   direct_url: [
     ['https://cdn.example.com/v/a.mp4', 'https://bucket.r2.dev/a/b.mkv', 'https://files.mysite.io/a.mp4?token=abc123&e=1'],
     ['https://other.example.org/a.mp4', 'https://r2.dev/a.mp4', 'https://cdn.example.com/a.mp4?X-Amz-Signature=abc'],
+  ],
+  ytdlp: [
+    ['https://video.example.org/watch/abc123', 'https://a.media.example/v?id=1', 'https://watch.example.net/p/slug?x=1&y=2'],
+    ['https://video.example.org/watch?id=1', 'https://unknown-site.example.com/watch/abc', 'https://watch.example.net/a/../b'],
   ],
   onedrive: [
     ['https://1drv.ms/u/s!AbCdEfGhIjK', 'https://1drv.ms/u/c/0123456789abcdef/EaBcDeFgHiJ', 'https://onedrive.live.com/?resid=ABCDEF123456789%21123&authkey=%21AbCd123'],
@@ -107,6 +112,13 @@ test('validateRef từ chối ref chứa .. hoặc ký tự lạ', () => {
   assert.equal(validateRef('gdrive', { id: ID, resourcekey: null, extra: 1 }).ok, false);
   assert.equal(validateRef('direct_url', { host: 'cdn.example.com', path: '/a/../b.mp4', query: null }, { allowedHosts }).ok, false);
   assert.equal(validateRef('khong_co', {}).ok, false);
+});
+
+test('host bật ytdlp không được dùng như direct_url (và ngược lại)', () => {
+  assert.equal(validateRef('direct_url', { host: 'video.example.org', path: '/a.mp4', query: null }, { allowedHosts }).ok, false);
+  assert.equal(validateRef('ytdlp', { host: 'cdn.example.com', path: '/a.mp4', query: null }, { allowedHosts }).ok, false);
+  assert.equal(parseLink('https://video.example.org/watch/abc123', { allowedHosts }).provider, 'ytdlp');
+  assert.equal(parseLink('https://cdn.example.com/v/a.mp4', { allowedHosts }).provider, 'direct_url');
 });
 
 test('matchAllowedHost', () => {

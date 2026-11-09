@@ -42,7 +42,7 @@ const run = mode !== 'dry_run' && picked.length > 0;
 
 setOutput('has_items', run ? 'true' : 'false');
 setOutput('matrix', matrix);
-setOutput('runner', settings.runner_label);
+setOutput('runner', JSON.stringify(settings.runner_label));
 setOutput('max_parallel', String(settings.max_parallel));
 setOutput('free_disk', settings.free_disk_space ? 'true' : 'false');
 setOutput('invalid', invalid);

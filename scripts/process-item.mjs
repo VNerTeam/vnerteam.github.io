@@ -320,10 +320,33 @@ async function findExistingRelease(hash6) {
   return null;
 }
 async function assetOk(tag, name, size) {
-  const v = await gh(['release', 'view', tag, '--repo', REPO, '--json', 'assets']);
-  if (v.code !== 0) return false;
-  const a = (JSON.parse(v.stdout).assets || []).find((x) => x.name === name);
-  return !!a && a.state === 'uploaded' && a.size === size;
+  // Dùng danh sách release (có cả bản nháp). `gh release view <tag>` không thấy bản nháp nên trước đây luôn báo chưa đạt.
+  const v = await gh(['api', `repos/${REPO}/releases?per_page=30`]);
+  if (v.code !== 0) {
+    log(`  không đọc được danh sách release: ${(v.stderr || '').trim().slice(-160)}`);
+    return false;
+  }
+  let rel;
+  try {
+    rel = JSON.parse(v.stdout).find((r) => r.tag_name === tag);
+  } catch {
+    log('  danh sách release trả về không phải JSON');
+    return false;
+  }
+  if (!rel) {
+    log(`  không thấy release ${tag} trong danh sách`);
+    return false;
+  }
+  const a = (rel.assets || []).find((x) => x.name === name);
+  if (!a) {
+    log(`  release chưa có asset ${name} (hiện có: ${(rel.assets || []).map((x) => x.name).join(', ') || 'không có'})`);
+    return false;
+  }
+  if (a.state !== 'uploaded' || a.size !== size) {
+    log(`  asset state=${a.state}, size=${a.size} (cần ${size})`);
+    return false;
+  }
+  return true;
 }
 function tagFor(id) {
   const p = tzParts(new Date(), settings.timezone);
@@ -344,7 +367,7 @@ async function publishRelease({ id, assetPath, assetName, title, notes, sha, siz
     const u = await spawnStream('gh', ['release', 'upload', tag, assetPath, '--repo', REPO, '--clobber'], { timeoutMs: hardMs() - 60000 });
     good = u.code === 0 && (await assetOk(tag, assetName, size));
     if (!good) {
-      log(`Upload/xác nhận lần ${i} chưa đạt: ${(u.stderr || '').trim().slice(-160)}`);
+      log(`Upload/xác nhận lần ${i} chưa đạt (gh mã ${u.code}): ${(u.stderr || '').trim().slice(-160)}`);
       await sleep(5000 * i);
     }
   }

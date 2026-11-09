@@ -260,7 +260,7 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "no_result",
       "added_at": "2026-11-09T00:23:03.367Z"
@@ -284,7 +284,7 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "no_result",
       "added_at": "2026-11-09T00:23:03.367Z"
@@ -308,7 +308,7 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "no_result",
       "added_at": "2026-11-09T00:23:03.367Z"
@@ -332,7 +332,7 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "no_result",
       "added_at": "2026-11-09T00:23:03.367Z"
@@ -356,7 +356,7 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "no_result",
       "added_at": "2026-11-09T00:23:03.367Z"

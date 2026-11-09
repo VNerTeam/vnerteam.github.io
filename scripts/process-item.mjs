@@ -316,6 +316,7 @@ async function findExistingRelease(hash6) {
     }
     const v = await gh(['release', 'view', h.tagName, '--repo', REPO, '--json', 'assets']);
     if (v.code === 0 && (JSON.parse(v.stdout).assets || []).some((x) => x.state === 'uploaded' && x.size > 0)) return h.tagName;
+    await gh(['release', 'delete', h.tagName, '--repo', REPO, '--yes', '--cleanup-tag']); // release dở dang, chưa có file
   }
   return null;
 }
@@ -358,29 +359,40 @@ async function publishRelease({ id, assetPath, assetName, title, notes, sha, siz
   const notesFile = path.join(workDir, 'notes.md');
   fs.writeFileSync(notesFile, notes);
   await gh(['release', 'delete', tag, '--repo', REPO, '--yes', '--cleanup-tag']); // dọn bản trùng tag (nếu có)
-  const c = await gh(['release', 'create', tag, '--repo', REPO, '--draft', '--title', title, '--notes-file', notesFile, '--target', BRANCH, '--latest=false']);
+  // Tạo luôn release chính thức, rồi upload file vào. Lỗi thì xoá release đi (cleanFail).
+  const c = await gh(['release', 'create', tag, '--repo', REPO, '--title', title, '--notes-file', notesFile, '--target', BRANCH, '--latest=false']);
   if (c.code !== 0) throw new Fail('release_failed', `Không tạo được release: ${c.stderr.slice(0, 160)}`);
-  let good = false;
-  for (let i = 1; i <= 3 && !good; i++) {
-    if (hardMs() < 2 * 60000) throw new Fail('timeout', 'Hết thời gian khi upload.');
-    log(`Upload asset (lần ${i}/3)…`);
-    const u = await spawnStream('gh', ['release', 'upload', tag, assetPath, '--repo', REPO, '--clobber'], { timeoutMs: hardMs() - 60000 });
-    good = u.code === 0 && (await assetOk(tag, assetName, size));
-    if (!good) {
-      log(`Upload/xác nhận lần ${i} chưa đạt (gh mã ${u.code}): ${(u.stderr || '').trim().slice(-160)}`);
-      await sleep(5000 * i);
-    }
-  }
   const cleanFail = async (code, msg) => {
     await gh(['release', 'delete', tag, '--repo', REPO, '--yes', '--cleanup-tag']);
     throw new Fail(code, msg);
   };
+  // gh lấy tên asset từ TÊN FILE, nên phải đổi file "out.mp4" thành đúng assetName trước khi upload.
+  const staged = path.join(workDir, assetName);
+  fs.rmSync(staged, { force: true });
+  try {
+    fs.linkSync(assetPath, staged); // hard link: không tốn thêm dung lượng đĩa
+  } catch {
+    fs.copyFileSync(assetPath, staged);
+  }
+  let good = false;
+  try {
+    for (let i = 1; i <= 3 && !good; i++) {
+      if (hardMs() < 2 * 60000) await cleanFail('timeout', 'Hết thời gian khi upload.');
+      log(`Upload asset (lần ${i}/3)…`);
+      const u = await spawnStream('gh', ['release', 'upload', tag, staged, '--repo', REPO, '--clobber'], { timeoutMs: hardMs() - 60000 });
+      good = u.code === 0 && (await assetOk(tag, assetName, size));
+      if (!good) {
+        log(`Upload/xác nhận lần ${i} chưa đạt (gh mã ${u.code}): ${(u.stderr || '').trim().slice(-160)}`);
+        await sleep(5000 * i);
+      }
+    }
+  } finally {
+    fs.rmSync(staged, { force: true });
+  }
   if (!good) await cleanFail('upload_failed', 'Upload asset không được xác nhận sau 3 lần.');
-  const p = await gh(['release', 'edit', tag, '--repo', REPO, '--draft=false', '--latest=false']);
-  if (p.code !== 0) await cleanFail('release_failed', `Không công khai được release: ${p.stderr.slice(0, 160)}`);
   // Xác nhận lần cuối qua API (digest SHA256 nếu có)
   const api = await gh(['api', `repos/${REPO}/releases/tags/${tag}`]);
-  if (api.code !== 0) await cleanFail('upload_failed', 'Không đọc lại được release sau khi công khai.');
+  if (api.code !== 0) await cleanFail('upload_failed', 'Không đọc lại được release sau khi upload.');
   const asset = (JSON.parse(api.stdout).assets || []).find((x) => x.name === assetName);
   if (!asset || asset.state !== 'uploaded' || asset.size !== size) await cleanFail('upload_failed', 'Asset trên release không khớp dung lượng.');
   if (asset.digest && asset.digest !== `sha256:${sha}`) await cleanFail('upload_failed', 'SHA256 của asset không khớp file cục bộ.');

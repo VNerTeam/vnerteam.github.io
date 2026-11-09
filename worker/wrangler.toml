@@ -3,12 +3,12 @@ main = "src/index.mjs"
 compatibility_date = "2026-10-01"
 
 [vars]
-GH_OWNER = "TEN-TAI-KHOAN-GITHUB"        # điền: tên tài khoản chủ repo
-GH_REPO = "TEN-REPO"                     # điền: tên repo
+GH_OWNER = "VNerTeam"        # điền: tên tài khoản chủ repo
+GH_REPO = "vnerteam.github.io"                     # điền: tên repo
 GH_BRANCH = "main"
 WORKFLOW_FILE = "compress.yml"
-ALLOWED_ORIGIN = "https://TEN-TAI-KHOAN-GITHUB.github.io"  # chỉ gồm scheme + host, không có đường dẫn
+ALLOWED_ORIGIN = "https://vnerteam.github.io"  # chỉ gồm scheme + host, không có đường dẫn
 
 [[kv_namespaces]]
 binding = "RATE"
-id = "DIEN-ID-KV-SAU-KHI-TAO"            # wrangler kv namespace create RATE
+id = "8901f23df29a4f6eb76f08616b8cac63"            # wrangler kv namespace create RATE

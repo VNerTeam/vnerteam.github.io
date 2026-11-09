@@ -135,10 +135,10 @@ export function fmtDur(sec) {
   const s = sec % 60;
   return h ? `${h}g ${m}p ${s}s` : m ? `${m}p ${s}s` : `${s}s`;
 }
-export function slugify(s, max = 60, keepCase = false) {
-  let t = String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
-  if (!keepCase) t = t.toLowerCase();
-  t = t.replace(/\.[A-Za-z0-9]{2,4}$/, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max).replace(/-+$/g, '');
+export function slugify(s, max = 60) {
+  const t = String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .toLowerCase().replace(/\.[a-z0-9]{2,4}$/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max).replace(/-+$/g, '');
   return t || 'video';
 }
 export function tzParts(date, tz) {

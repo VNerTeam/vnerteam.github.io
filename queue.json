@@ -16,7 +16,7 @@
         "fps_cap": null,
         "audio": "opus_128",
         "container": "mp4",
-        "min_vmaf": null
+        "min_vmaf": 95
       },
       "status": "pending",
       "attempts": 0,

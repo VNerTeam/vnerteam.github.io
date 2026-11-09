@@ -1,6 +1,6 @@
 // Giao diện quản lý hàng đợi. Mọi chuỗi động hiển thị bằng textContent (không innerHTML).
 import { WORKER_URL } from './config.js';
-import { parseLink, PROVIDERS } from './lib/providers.mjs';
+import { parseLink, suggestName, PROVIDERS } from './lib/providers.mjs';
 import { OPTION_CHOICES, OPTION_LABELS, VMAF_RANGE, defaultOptions, validateOptions, validateLabel } from './lib/schema.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -125,7 +125,7 @@ function addDrafts() {
   let n = 0;
   for (const { url, r } of parseLines()) {
     if (!r.ok) continue;
-    state.drafts.push({ key: state.nextId++, url, parsed: r, options: { ...state.defaults }, label: '', error: null });
+    state.drafts.push({ key: state.nextId++, url, parsed: r, options: { ...state.defaults }, label: suggestName(r.provider, r.ref) || '', error: null });
     n++;
   }
   if (n) { $('links').value = ''; renderPreview(); }

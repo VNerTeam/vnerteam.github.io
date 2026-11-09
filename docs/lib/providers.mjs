@@ -384,3 +384,25 @@ export function parseLink(raw, { allowedHosts = [] } = {}) {
     throw e;
   }
 }
+
+// Gợi ý tên hiển thị từ chính link (không cần mạng). Trả về null nếu không đoán được (vd Google Drive: tên được lấy lúc nén).
+export function suggestName(provider, ref) {
+  const lastSeg = (p) => {
+    let x = String(p || '');
+    try { x = decodeURIComponent(x); } catch { /* giữ nguyên */ }
+    return x.split('/').filter(Boolean).pop() || null;
+  };
+  let n = null;
+  switch (provider) {
+    case 'direct_url': n = new URLSearchParams(ref.query || '').get('download_filename') || lastSeg(ref.path); break;
+    case 'github_release': n = ref.asset; break;
+    case 'github_repo':
+    case 'huggingface': n = lastSeg(ref.path); break;
+    case 'internet_archive': n = lastSeg(ref.file); break;
+    case 'dropbox': n = ref.name; break;
+    default: return null;
+  }
+  if (!n) return null;
+  n = String(n).replace(/\.[A-Za-z0-9]{2,4}$/, '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+  return n || null;
+}

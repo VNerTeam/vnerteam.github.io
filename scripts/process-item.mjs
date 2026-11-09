@@ -221,14 +221,23 @@ async function download(plan, dest, maxBytes, timeoutMs) {
   }
   const url = `https://drive.google.com/uc?id=${plan.id}${plan.resourcekey ? `&resourcekey=${plan.resourcekey}` : ''}`;
   mask(url);
-  const r = await spawnStream('gdown', ['-q', '-O', dest, url], { timeoutMs });
+  // -O <thư mục>/ để gdown giữ nguyên tên file gốc trên Drive (dùng làm tên gợi ý cho video)
+  const gdDir = path.join(path.dirname(dest), 'gd');
+  fs.rmSync(gdDir, { recursive: true, force: true });
+  fs.mkdirSync(gdDir, { recursive: true });
+  const r = await spawnStream('gdown', ['-q', '-O', `${gdDir}${path.sep}`, url], { timeoutMs });
   if (r.timedOut) throw new Fail('timeout', 'Hết thời gian khi tải.');
   const t = `${r.stdout}\n${r.stderr}`;
   if (/too many users|quota/i.test(t)) throw new Fail('drive_quota', 'Google Drive đang giới hạn lượt tải của file này. Thử lại sau vài giờ.');
-  if (r.code !== 0 || !fs.existsSync(dest)) {
+  const got = fs.existsSync(gdDir) ? fs.readdirSync(gdDir).filter((f) => !f.startsWith('.')) : [];
+  if (r.code !== 0 || got.length !== 1) {
     if (/cannot retrieve the public link|permission|access denied|failed to retrieve file url/i.test(t)) throw new Fail('drive_private', 'File Drive chưa chia sẻ "bất kỳ ai có link".');
-    throw new Fail('download_failed', `gdown lỗi: ${t.trim().split('\n').slice(-1)[0].slice(0, 160)}`);
+    throw new Fail('download_failed', `gdown lỗi: ${t.trim().split('\n').slice(-1)[0].slice(0, 160) || 'không thấy file tải về'}`);
   }
+  fs.renameSync(path.join(gdDir, got[0]), dest);
+  fs.rmSync(gdDir, { recursive: true, force: true });
+  plan.nameHint = got[0];
+  log(`Tên file gốc trên Drive: ${got[0]}`);
 }
 
 
@@ -518,7 +527,7 @@ async function processItem(item) {
   const step = ladder[stepIdx];
   const { date, at } = tagFor(item.id);
   const nameBase = item.label || (plan0.nameHint ? plan0.nameHint.replace(/\.[A-Za-z0-9]{2,4}$/, '') : 'video');
-  const assetName = `${slugify(nameBase, 80)}-${opt.resolution}-${opt.codec}.${opt.container}`;
+  const assetName = `${slugify(nameBase, 80, true)}-${opt.resolution}-${opt.codec}.${opt.container}`;
   const title = `[${date}] ${item.label || nameBase} · ${RES_LABEL[opt.resolution]} · ${Q_LABEL[opt.quality]} · ${opt.codec.toUpperCase()}`;
   const o2 = analyze(await ffprobe(outPath));
   const saved = ((1 - result.out_bytes / inSize) * 100).toFixed(1);

@@ -14,6 +14,14 @@ const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 const e = encodeURIComponent;
 const encPath = (p) => p.split('/').map(e).join('/');
 const base = (p) => p.split('/').pop();
+// Tên file gốc của link trực tiếp: ưu tiên tham số download_filename, nếu không thì đoạn cuối (không rỗng) của đường dẫn
+function directName(r) {
+  const dl = new URLSearchParams(r.query || '').get('download_filename');
+  if (dl) return dl;
+  let p = r.path;
+  try { p = decodeURIComponent(r.path); } catch { /* giữ nguyên */ }
+  return p.split('/').filter(Boolean).pop() || null;
+}
 const http = (url, nameHint = null) => ({ kind: 'http', url, nameHint });
 
 // ---- mạng: chỉ https, tối đa 5 lần chuyển hướng ----
@@ -158,7 +166,7 @@ export const RESOLVERS = {
     return http(`https://huggingface.co/${prefix}${r.repo}/resolve/${e(r.rev)}/${encPath(r.path)}`, base(r.path));
   },
   internet_archive: async (r) => http(`https://archive.org/download/${e(r.identifier)}/${encPath(r.file)}`, base(r.file)),
-  direct_url: async (r) => http(`https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, base(decodeURIComponent(r.path))),
+  direct_url: async (r) => http(`https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, directName(r)),
   ytdlp: async (r) => ({ kind: 'ytdlp', url: `https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, nameHint: null }),
   onedrive: resolveOnedrive,
 };

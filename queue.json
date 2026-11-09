@@ -18,10 +18,10 @@
         "container": "mp4",
         "min_vmaf": 95
       },
-      "status": "pending",
-      "attempts": 2,
+      "status": "failed",
+      "attempts": 3,
       "ladder_start": 0,
-      "last_error": "cancelled",
+      "last_error": "crf_not_found",
       "added_at": "2026-11-09T05:51:26.142Z"
     },
     {

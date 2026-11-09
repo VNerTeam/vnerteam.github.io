@@ -1,4 +1,97 @@
 {
   "version": 1,
-  "items": []
+  "items": [
+    {
+      "id": "q-20261109-055126-8ade96",
+      "provider": "gdrive",
+      "ref": {
+        "id": "1uaVFBsf2Y40Y8uuOm0-IH4VXay6fX897",
+        "resourcekey": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T05:51:26.142Z"
+    },
+    {
+      "id": "q-20261109-055126-dcdfad",
+      "provider": "gdrive",
+      "ref": {
+        "id": "11EKA4O1pVbmYn0CeWbL1CIIBE18BtD-q",
+        "resourcekey": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T05:51:26.142Z"
+    },
+    {
+      "id": "q-20261109-055126-12813a",
+      "provider": "gdrive",
+      "ref": {
+        "id": "1caWDYq2RM78nOkZdKHXBazLXUc4SS8dz",
+        "resourcekey": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T05:51:26.142Z"
+    },
+    {
+      "id": "q-20261109-055126-1776fd",
+      "provider": "gdrive",
+      "ref": {
+        "id": "1WlDQ28MrDlMYRence0Dijxr_Cqkos705",
+        "resourcekey": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T05:51:26.142Z"
+    }
+  ]
 }

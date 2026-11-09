@@ -78,7 +78,7 @@ command -v ffprobe >/dev/null || { echo "::error::Thiếu ffprobe"; exit 1; }
 ab-av1 --version || { echo "::error::ab-av1 không chạy được"; exit 1; }
 gdown --version || { echo "::error::gdown không chạy được"; exit 1; }
 yt-dlp --version || { echo "::error::yt-dlp không chạy được"; exit 1; }
-ffmpeg -hide_banner -version | head -n1
+ffmpeg -hide_banner -version 2>&1 | sed -n 1p
 # Lưu --help của đúng phiên bản đã ghim để đối chiếu cờ khi có lỗi
 for c in crf-search encode; do ab-av1 "$c" --help > "$TOOLS_DIR/help-$c.txt" 2>&1 || true; done
 echo "Công cụ sẵn sàng."

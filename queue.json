@@ -39,7 +39,7 @@
       "options": {
         "resolution": "original",
         "quality": "strong",
-        "codec": "av1",
+        "codec": "hevc",
         "fps_cap": null,
         "audio": "opus_128",
         "container": "mp4",
@@ -89,7 +89,7 @@
       "options": {
         "resolution": "original",
         "quality": "strong",
-        "codec": "av1",
+        "codec": "hevc",
         "fps_cap": null,
         "audio": "opus_128",
         "container": "mp4",

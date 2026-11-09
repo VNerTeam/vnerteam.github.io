@@ -16,6 +16,7 @@ const ERROR_TEXT = {
   too_big: 'File sau khi nén vẫn lớn hơn 2 GiB (giới hạn của Release).',
   no_gain: 'Nén xong không nhỏ hơn bản gốc nên không đăng lên.',
   timeout: 'Hết thời gian xử lý. Lần sau sẽ dùng tốc độ nhanh hơn.',
+  job_failed: 'Job lỗi trước khi nén xong (thường ở bước cài công cụ hoặc tải). Mở log của lần chạy để xem bước nào đỏ.',
   no_result: 'Job bị dừng giữa chừng, chưa có kết quả.',
   cancelled: 'Job bị hủy.',
   input_too_big: 'File nguồn lớn hơn giới hạn max_input_gb.',

@@ -184,6 +184,366 @@
       "ladder_start": 0,
       "last_error": null,
       "added_at": "2026-11-09T02:36:46.554Z"
+    },
+    {
+      "id": "q-20261109-024237-1717f2",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3964318/yelon-ontop-of-aether/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-22a3e3",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3619134/aether-chad-smashes-hawt-cocogoat-and-tsundere-waifu/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-ba6766",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3568761/keqing-riding/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-c7523d",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3425736/ganyu-missionary/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-defbca",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3416074/shenhe8/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-40a816",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3415045/lisa-was-taken-care-of-by-the-traveler/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-96a2a4",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3107956/yae-miko-aether/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-fd333e",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3107950/shenhe-aether/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-968a18",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3107949/mirror-maiden-aether/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-1254d9",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3107909/eula-aether/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-bfa8bf",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3107902/hu-tao-aether/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-55104b",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3090540/elysia-honkai-impact-4k-shirakami/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-cbb8cf",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3084675/ganyu-by-shirakami-4k-1080p-with-audio/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-211504",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3075200/la-signora-x-venti-doggy-shirakami/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
+    },
+    {
+      "id": "q-20261109-024237-2c55b7",
+      "provider": "ytdlp",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3072773/ningguang-shirakami/",
+        "query": null
+      },
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T02:42:37.893Z"
     }
   ]
 }

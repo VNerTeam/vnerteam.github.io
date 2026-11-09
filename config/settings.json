@@ -1,8 +1,8 @@
 {
   "runner_label": "ubuntu-latest",
   "max_parallel": 2,
-  "max_items_per_run": 10,
-  "max_items_per_day": 10,
+  "max_items_per_run": 6,
+  "max_items_per_day": 12,
   "time_budget_min": 270,
   "reserve_min": 20,
   "max_input_gb": 6,

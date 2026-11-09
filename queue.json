@@ -1,28 +1,4 @@
 {
   "version": 1,
-  "items": [
-    {
-      "id": "q-20261109-023646-ad1663",
-      "provider": "gdrive",
-      "ref": {
-        "id": "1WlDQ28MrDlMYRence0Dijxr_Cqkos705",
-        "resourcekey": null
-      },
-      "label": null,
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "av1",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "min_vmaf": 90
-      },
-      "status": "failed",
-      "attempts": 3,
-      "ladder_start": 0,
-      "last_error": "crf_not_found",
-      "added_at": "2026-11-09T02:36:46.554Z"
-    }
-  ]
+  "items": []
 }

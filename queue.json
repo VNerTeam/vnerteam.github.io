@@ -19,10 +19,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "failed",
-      "attempts": 3,
+      "status": "pending",
+      "attempts": 0,
       "ladder_start": 0,
-      "last_error": "no_result",
+      "last_error": null,
       "added_at": "2026-11-09T00:23:03.367Z"
     },
     {

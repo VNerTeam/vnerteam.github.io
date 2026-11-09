@@ -23,6 +23,106 @@
       "ladder_start": 0,
       "last_error": null,
       "added_at": "2026-11-09T05:51:26.142Z"
+    },
+    {
+      "id": "q-20261109-143524-39364e",
+      "provider": "github_release",
+      "ref": {
+        "owner": "VNerTeam",
+        "repo": "storage",
+        "tag": "video-storage",
+        "asset": "elysia-honkai-impact-4k-shirakami_2160p.mp4"
+      },
+      "label": "elysia-honkai-impact-4k-shirakami_2160p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 92
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T14:35:24.050Z"
+    },
+    {
+      "id": "q-20261109-143524-9a814f",
+      "provider": "github_release",
+      "ref": {
+        "owner": "VNerTeam",
+        "repo": "storage",
+        "tag": "video-storage",
+        "asset": "ganyu12_1080p.mp4"
+      },
+      "label": "ganyu12_1080p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T14:35:24.050Z"
+    },
+    {
+      "id": "q-20261109-143524-41809f",
+      "provider": "github_release",
+      "ref": {
+        "owner": "VNerTeam",
+        "repo": "storage",
+        "tag": "video-storage",
+        "asset": "i-like-that-hmv2_1080p.mp4"
+      },
+      "label": "i-like-that-hmv2_1080p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T14:35:24.050Z"
+    },
+    {
+      "id": "q-20261109-143524-30b41e",
+      "provider": "github_release",
+      "ref": {
+        "owner": "VNerTeam",
+        "repo": "storage",
+        "tag": "video-storage",
+        "asset": "aether-chad-smashes-hawt-cocogoat-and-tsundere-waifu_2160p.mp4"
+      },
+      "label": "aether-chad-smashes-hawt-cocogoat-and-tsundere-waifu_2160p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T14:35:24.050Z"
     }
   ]
 }

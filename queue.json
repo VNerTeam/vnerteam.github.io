@@ -10,7 +10,7 @@
       },
       "label": null,
       "options": {
-        "resolution": "fhd",
+        "resolution": "original",
         "quality": "balanced",
         "codec": "av1",
         "fps_cap": null,

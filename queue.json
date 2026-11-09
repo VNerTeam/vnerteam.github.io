@@ -2,31 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "q-20261109-143524-39364e",
-      "provider": "github_release",
-      "ref": {
-        "owner": "VNerTeam",
-        "repo": "storage",
-        "tag": "video-storage",
-        "asset": "elysia-honkai-impact-4k-shirakami_2160p.mp4"
-      },
-      "label": "elysia-honkai-impact-4k-shirakami_2160p",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "min_vmaf": 92
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-09T14:35:24.050Z"
-    },
-    {
       "id": "q-20261109-143524-9a814f",
       "provider": "github_release",
       "ref": {

@@ -3,7 +3,9 @@
   "hosts": [
     { 
       "host": "rule34video.com", 
-      "allow_query": true },
+      "allow_query": true,
+      "ytdlp": true
+    },
     {
       "host": "youtube.com",
       "allow_query": true,

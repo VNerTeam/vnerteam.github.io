@@ -156,10 +156,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 2,
+      "status": "failed",
+      "attempts": 3,
       "ladder_start": 0,
-      "last_error": "cancelled",
+      "last_error": "crf_not_found",
       "added_at": "2026-11-09T02:36:46.554Z"
     },
     {
@@ -276,10 +276,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -300,10 +300,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -324,10 +324,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -348,10 +348,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -372,10 +372,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {

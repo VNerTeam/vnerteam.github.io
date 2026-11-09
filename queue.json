@@ -157,32 +157,9 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
-      "last_error": "no_result",
-      "added_at": "2026-11-09T02:36:46.554Z"
-    },
-    {
-      "id": "q-20261109-023646-1c6fe7",
-      "provider": "gdrive",
-      "ref": {
-        "id": "14bsPUzs_ublb8CFSyPRFD0Ke8PyRBmwz",
-        "resourcekey": null
-      },
-      "label": null,
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "av1",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "min_vmaf": 90
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
+      "last_error": "cancelled",
       "added_at": "2026-11-09T02:36:46.554Z"
     },
     {
@@ -203,10 +180,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -227,10 +204,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -251,10 +228,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {
@@ -275,10 +252,10 @@
         "container": "mp4",
         "min_vmaf": 90
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "download_failed",
       "added_at": "2026-11-09T02:42:37.893Z"
     },
     {

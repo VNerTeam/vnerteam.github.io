@@ -20,9 +20,9 @@
         "min_vmaf": 90
       },
       "status": "pending",
-      "attempts": 0,
+      "attempts": 1,
       "ladder_start": 0,
-      "last_error": null,
+      "last_error": "no_result",
       "added_at": "2026-11-09T00:23:03.367Z"
     },
     {

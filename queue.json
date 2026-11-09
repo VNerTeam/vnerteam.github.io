@@ -1,4 +1,365 @@
 {
   "version": 1,
-  "items": []
+  "items": [
+    {
+      "id": "q-20261109-002303-24c2ca",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/58/fc41a53893f888fe7ff30a56fd60dfba/3067000/3067557/3067557_2160p.mp4/",
+        "query": "v-acctoken=MjAyODJ8MjAzMTB8MHwxNDVmMTQ5YzM0YzQyYmZhOGI1Y2NjZmU4ZjMwNDQ4MA8a483733e9588910&download=true&download_filename=genshin-ganyu-hilichurl-4k-nagoonimation_2160p.mp4"
+      },
+      "label": "[Genshin] Ganyu ♡ Hilichurl [4K] [Nagoonimation]",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-e87d30",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/58/d4cc0a2ac7bc672d27bf64f8b8b75f96/3067000/3067556/3067556_2160p.mp4/",
+        "query": "v-acctoken=MjEyNDB8MjAzMTB8MHw4MjgwNTU4NjQzMjc3ODE1YzIyOGFjYTAxOGQzYmQ0ZQ51c8dc053119670a&download=true&download_filename=genshin-ganyu-hilichurl-pantyhose-4k-nagoonimation_2160p.mp4"
+      },
+      "label": "[Genshin] Ganyu ♡ Hilichurl (Pantyhose) [4K] [Nagoonimation]",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-c0a126",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/80abcc865d3bf758c2cad1868aa25319/3107000/3107950/3107950_2160p.mp4/",
+        "query": "v-acctoken=MTA0NDB8MzIzMTQ4fDB8ODZhNWQ4M2NmMDA5MTdiZTEyMTU0MTJhZTU5MDU1NTg2aaee3d93a004b1c&download=true&download_filename=shenhe-aether_2160p.mp4"
+      },
+      "label": "Shenhe & Aether",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-d7e4ce",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/413f61a2fb4bc8d2bff0329d6934036d/3107000/3107929/3107929_2160p.mp4/",
+        "query": "v-acctoken=MTA0OTl8MzIzMTQ4fDB8NzYxOGRlZTI1NGNhYjUxODQzMTEwMjZlZGJmMDg5MjMa46832dcb7c18c64&download=true&download_filename=raiden-shogun-aether-blowjob_2160p.mp4"
+      },
+      "label": "Raiden Shogun & Aether blowjob",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-401edc",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/f08763bbd009a420de08fc58c4bde89c/3107000/3107934/3107934_2160p.mp4/",
+        "query": "v-acctoken=MTE3MjN8MzIzMTQ4fDB8MWJlNjE3NTA2NGZlYWJlYTRkZTk3YzM1ZmQyYzI3MTQe65222db660d4451&download=true&download_filename=lisa-aether_2160p.mp4"
+      },
+      "label": "Lisa & Aether",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-5edbc6",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/31b8c758340ab827040cdaa6cc23157f/3107000/3107925/3107925_2160p.mp4/",
+        "query": "v-acctoken=MTA2MDd8MzIzMTQ4fDB8YTYxMmE4ODkyNWY0MWE4YzI5MmZlNjNmOGJkZDY1YmY0291c93e19a196e3&download=true&download_filename=raiden-shogun-aether_2160p.mp4"
+      },
+      "label": "Raiden Shogun & Aether",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-5c01e0",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/27d3a0825ac3b2e38f5d7e681eef6ca7/3107000/3107923/3107923_2160p.mp4/",
+        "query": "v-acctoken=MTIzMzB8MzIzMTQ4fDB8ZTMxMDNjNDg0MWE3OGMwZjUzZjJlYjM3MWFmOGQ2MzA9be7db0cbad5b311&download=true&download_filename=ayaka-aether_2160p.mp4"
+      },
+      "label": "Ayaka & Aether",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-a4ae52",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/027faf8cef1b8657bf650dde9cbd24ed/3107000/3107909/3107909_2160p.mp4/",
+        "query": "v-acctoken=MTU2NjN8MzIzMTQ4fDB8YjA3YjUwNTBhYjVkMzA1NTA1NmMwMGI5MWVhN2EwNTQa61c4afb6c4b2896&download=true&download_filename=eula-aether_2160p.mp4"
+      },
+      "label": "Eula & Aether",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-d6373d",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/07c022ab317f98ebe14a8c8ea4eed429/3107000/3107902/3107902_2160p.mp4/",
+        "query": "v-acctoken=MTA5OTJ8MzIzMTQ4fDB8YWFmOWRjMDNjNGMxODUwNjM3ZjUxMmY3NWY1OTdmNWY03b52006e6177540&download=true&download_filename=hu-tao-aether_2160p.mp4"
+      },
+      "label": "Hu Tao & Aether",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-99e7d4",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/dc76a7612ed75a5d11e26b000e5c4a2c/3090000/3090540/3090540_2160p.mp4/",
+        "query": "v-acctoken=MTg4MDZ8OTg5NjV8MHxjY2VhMmM0ZDk3ODA4OGU0MzNlYTA1MTMyZWU5MDIxMAcd196617c6b405e6&download=true&download_filename=elysia-honkai-impact-4k-shirakami_2160p.mp4"
+      },
+      "label": "Elysia Honkai Impact [4K][Shirakami]",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-f6168d",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/58/63f06c92606ca8c5ac6d5e2d1e53bafd/3084000/3084675/3084675_2160p.mp4/",
+        "query": "v-acctoken=MTE2NTN8MzE5MjZ8MHw0NWE0ZmQ5ZWFjODkwODhiNDI2ZWQ4MmQ2MGVlZDAwOAa515582e2385bf91&download=true&download_filename=ganyu-by-shirakami-4k-1080p-with-audio_2160p.mp4"
+      },
+      "label": "Ganyu (by Shirakami 4K,1080p with audio)",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-28ee75",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/b7463e2e38fb475cc22f0141a62d398a/3075000/3075200/3075200_2160p.mp4/",
+        "query": "v-acctoken=MTAxNTh8MzYyODF8MHxhOWQxNWMyMjg1NmRkYTU0MzBjOWIzMTJlMGFlODhkZg460385165b562d2d&download=true&download_filename=la-signora-x-venti-doggy-shirakami_2160p.mp4"
+      },
+      "label": "La Signora x Venti Doggy [shirakami]",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-31f47c",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/9491cbb123383882390f46c14c94b033/3072000/3072773/3072773_2160p.mp4/",
+        "query": "v-acctoken=ODk5MXw5ODk2NXwwfGJhNGMzYjc0NGIzZDRiMzlkOTMxMGEwMzBiN2FhYWE07bba1d5e9e0b76e0&download=true&download_filename=ningguang-shirakami_2160p.mp4"
+      },
+      "label": "Ningguang [Shirakami]",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-15166f",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/0847c73fecec118c94f96493839a4e1e/3619000/3619134/3619134_2160p.mp4/",
+        "query": "v-acctoken=MTc5NzR8MzYzMzM1fDB8NTNmYzUzYzkxZWYyODBlNjNlNzI2OGE4NzlmMDY5MDkc71156f5dae1d71d&download=true&download_filename=aether-chad-smashes-hawt-cocogoat-and-tsundere-waifu_2160p.mp4"
+      },
+      "label": "Aether-chad smashes Hawt Cocogoat and Tsundere waifu",
+      "options": {
+        "resolution": "2k",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    },
+    {
+      "id": "q-20261109-002303-5720ea",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/54/845773882603f196c5b88afca14aea14/3964000/3964318/3964318_1080p.mp4/",
+        "query": "v-acctoken=NjQzNHwyMTgwOTI1fDB8MjAxNjRiYzBjM2M5NGZlM2U3NTc4ODQ3NjgyZTgwNTgf7c1d5922d10b450&download=true&download_filename=yelon-ontop-of-aether_1080p.mp4"
+      },
+      "label": "Yelon ontop of aether",
+      "options": {
+        "resolution": "fhd",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 90
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T00:23:03.367Z"
+    }
+  ]
 }

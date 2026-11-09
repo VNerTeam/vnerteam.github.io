@@ -100,6 +100,31 @@
       "ladder_start": 0,
       "last_error": null,
       "added_at": "2026-11-09T14:35:24.050Z"
+    },
+    {
+      "id": "q-20261109-150211-a98e19",
+      "provider": "github_release",
+      "ref": {
+        "owner": "VNerTeam",
+        "repo": "storage",
+        "tag": "video-storage",
+        "asset": "yelon-ontop-of-aether_1080p.mp4"
+      },
+      "label": "yelon-ontop-of-aether_1080p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "av1",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "min_vmaf": 95
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-09T15:02:11.942Z"
     }
   ]
 }

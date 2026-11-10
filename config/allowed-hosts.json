@@ -3,8 +3,8 @@
   "hosts": [
     {
       "host": "rule34video.com",
-      "allow_query": true,
-      "ytdlp": false
+      "allow_query": false,
+      "link_class": "tag_item tag_item_download vp-sheet__item"
     },
     {
       "host": "youtube.com",

@@ -2,33 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "q-20261110-221726-be7e0c",
-      "provider": "direct_url",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/get_file/51/a62b342e97a1aa41a99e44f04df43541/3107000/3107973/3107973_2160p.mp4/",
-        "query": "v-acctoken=MTIzNzF8MzIzMTQ4fDB8N2I1ZTRhMjYwYzVkMGVjNWY5MjcwNGUzZTRkOWQ5Nzc346a2801737e36a4&download=true&download_filename=nilou-aether-full_2160p.mp4"
-      },
-      "referer": "https://rule34video.com/video/3107973/nilou-aether-full/",
-      "label": "nilou-aether-full_2160p",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-10T22:17:26.345Z"
-    },
-    {
       "id": "q-20261110-221726-ddc5fc",
       "provider": "direct_url",
       "ref": {

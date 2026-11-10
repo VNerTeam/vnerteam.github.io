@@ -2,33 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "q-20261110-221726-ddc5fc",
-      "provider": "direct_url",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/get_file/51/b5d26f2e7acd4e1ac8e0bc2b67e82ec1/3107000/3107956/3107956_2160p.mp4/",
-        "query": "v-acctoken=MTA1MTJ8MzIzMTQ4fDB8ZGQ0OGE5NTgyNTEwZTU2YTE3N2UyNzRjNTc0YzFlNzU7fa4d2a71a0e8833&download=true&download_filename=yae-miko-aether_2160p.mp4"
-      },
-      "referer": "https://rule34video.com/video/3107956/yae-miko-aether/",
-      "label": "yae-miko-aether_2160p",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-10T22:17:26.345Z"
-    },
-    {
       "id": "q-20261110-221726-e3ac5a",
       "provider": "github_release",
       "ref": {

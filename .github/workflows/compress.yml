@@ -1,11 +1,10 @@
 name: Nén video theo hàng đợi
 
 # Chỉ chủ repo dùng. Không dùng pull_request / pull_request_target / issues / fork.
-# Nếu nhánh mặc định không phải "main", sửa dòng branches bên dưới.
+# KHÔNG có trigger push: lưu/sửa hàng đợi (Worker ghi queue.json) không tự chạy workflow.
+# Workflow chỉ chạy khi bấm "Chạy ngay" trên trang (Worker gọi workflow_dispatch) hoặc "Run workflow" trong tab Actions,
+# và khi finalize tự gọi lại chính nó để làm tiếp phần còn lại của hàng đợi.
 on:
-  push:
-    branches: [main]
-    paths: [queue.json]
   workflow_dispatch:
     inputs:
       mode:
@@ -32,9 +31,11 @@ permissions: {}
 
 jobs:
   plan:
-    # github.actor là chủ repo (push bằng PAT qua Worker, bấm chạy tay) hoặc github-actions[bot] (tự gọi lại).
+    # workflow_dispatch do chủ repo kích hoạt (qua PAT của Worker hoặc bấm tay: github.actor là chủ repo)
+    # hoặc do finalize tự gọi lại (github.actor là github-actions[bot]).
     # Repo của tổ chức: actor là người dùng, không phải tổ chức → xem README.
     if: >-
+      github.event_name == 'workflow_dispatch' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
       (github.actor == github.repository_owner || github.actor == 'github-actions[bot]')
     runs-on: ubuntu-latest

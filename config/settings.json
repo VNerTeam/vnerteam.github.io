@@ -11,5 +11,7 @@
   "timezone": "Asia/Ho_Chi_Minh",
   "max_attempts": 3,
   "max_chain": 30,
-  "ytdlp_update_channel": "stable"
+  "ytdlp_update_channel": "stable",
+  "browser_headed": true,
+  "browser_phase_min": 3
 }

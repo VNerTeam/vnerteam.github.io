@@ -1,7 +1,7 @@
 // Cloudflare Worker: cổng ghi duy nhất vào hệ thống. PAT GitHub chỉ nằm trong secret của Worker.
 // Luật lọc link/tuỳ chọn dùng chung với trình duyệt và workflow (docs/lib/*.mjs).
 import { parseLink } from '../../docs/lib/providers.mjs';
-import { validateOptions, validateLabel, newItemId, dedupeKey, parseQueue, serializeQueue, LIMITS, ID_RE } from '../../docs/lib/schema.mjs';
+import { validateOptions, validateLabel, validateRefPage, newItemId, dedupeKey, parseQueue, serializeQueue, LIMITS, ID_RE } from '../../docs/lib/schema.mjs';
 import { CATALOG_TAG, CATALOG_JSON, parseCatalog, fromReleases, daysView } from '../../docs/lib/catalog.mjs';
 
 const enc = new TextEncoder();
@@ -58,9 +58,15 @@ function safeEqual(a, b) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ---- chống dò password (đếm theo IP trong KV, chỉ ghi khi nhập sai) ----
-async function readFails(env, ip) {
-  const raw = await env.RATE.get(`fail:${ip}`);
+// ---- chống dò password / PIN (đếm theo IP trong KV, chỉ ghi khi nhập sai) ----
+const PIN_RE = /^\d{4,12}$/;
+const PIN_KEY = 'auth:pin'; // { salt, hash } của PIN dự phòng, lưu trong KV của Cloudflare (dùng được từ mọi thiết bị)
+const PIN_GLOBAL_KEY = 'fail:pin-global'; // PIN ngắn nên có thêm trần chung cho mọi IP
+const PIN_GLOBAL_MAX = 20;
+const PIN_GLOBAL_WINDOW_MS = 60 * 60 * 1000;
+
+async function readFails(env, key) {
+  const raw = await env.RATE.get(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -68,31 +74,95 @@ async function readFails(env, ip) {
     return null;
   }
 }
-async function checkLock(env, ip) {
-  const f = await readFails(env, ip);
-  if (f && f.count >= FAIL_MAX && Date.now() - f.first < FAIL_WINDOW_MS) {
-    const wait = Math.ceil((FAIL_WINDOW_MS - (Date.now() - f.first)) / 1000);
-    throw new HttpError(429, 'too_many_attempts', `Nhập sai quá nhiều lần. Thử lại sau ${Math.ceil(wait / 60)} phút.`, { retry_after: wait });
+function lockError(f, max, windowMs, what) {
+  if (f && f.count >= max && Date.now() - f.first < windowMs) {
+    const wait = Math.ceil((windowMs - (Date.now() - f.first)) / 1000);
+    return new HttpError(429, 'too_many_attempts', `${what} sai quá nhiều lần. Thử lại sau ${Math.ceil(wait / 60)} phút.`, { retry_after: wait });
   }
+  return null;
+}
+async function recordFail(env, key, prev, windowMs) {
+  const now = Date.now();
+  const fresh = !prev || now - prev.first >= windowMs;
+  const rec = fresh ? { count: 1, first: now } : { count: prev.count + 1, first: prev.first };
+  await env.RATE.put(key, JSON.stringify(rec), { expirationTtl: Math.max(60, Math.ceil(windowMs / 1000)) });
+}
+async function checkLock(env, ip) {
+  const f = await readFails(env, `fail:${ip}`);
+  const e = lockError(f, FAIL_MAX, FAIL_WINDOW_MS, 'Nhập');
+  if (e) throw e;
   return f;
 }
-async function recordFail(env, ip, prev) {
-  const now = Date.now();
-  const fresh = !prev || now - prev.first >= FAIL_WINDOW_MS;
-  const rec = fresh ? { count: 1, first: now } : { count: prev.count + 1, first: prev.first };
-  await env.RATE.put(`fail:${ip}`, JSON.stringify(rec), { expirationTtl: Math.max(60, Math.ceil(FAIL_WINDOW_MS / 1000)) });
+
+async function readPin(env) {
+  const raw = await env.RATE.get(PIN_KEY);
+  if (!raw) return null;
+  try {
+    const j = JSON.parse(raw);
+    return typeof j.salt === 'string' && typeof j.hash === 'string' ? j : null;
+  } catch {
+    return null;
+  }
 }
+export async function hashPin(pin, salt) {
+  return sha256Hex(`pin:${salt}:${pin}`);
+}
+
+// Trả về { kind: 'password' | 'pin' }. Credential nằm trong header Authorization:
+//   Bearer <password>   (mặc định; trang ghi nhớ được trên thiết bị)
+//   Pin <mã PIN>        (đăng nhập dự phòng khi quên password; KHÔNG ghi nhớ trên thiết bị)
 async function authenticate(request, env) {
   if (!env.PASSWORD_HASH || !env.PASSWORD_SALT) throw new HttpError(500, 'not_configured', 'Worker chưa được cấu hình password.');
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   const prev = await checkLock(env, ip);
-  const m = /^Bearer (.{1,256})$/.exec(request.headers.get('Authorization') || '');
-  const ok = !!m && safeEqual(await sha256Hex(env.PASSWORD_SALT + m[1]), String(env.PASSWORD_HASH).toLowerCase());
-  if (!ok) {
-    await recordFail(env, ip, prev);
-    throw new HttpError(401, 'unauthorized', 'Sai password.');
+  const header = request.headers.get('Authorization') || '';
+  const mp = /^Bearer (.{1,256})$/.exec(header);
+  if (mp) {
+    const ok = safeEqual(await sha256Hex(env.PASSWORD_SALT + mp[1]), String(env.PASSWORD_HASH).toLowerCase());
+    if (!ok) {
+      await recordFail(env, `fail:${ip}`, prev, FAIL_WINDOW_MS);
+      throw new HttpError(401, 'unauthorized', 'Sai password.');
+    }
+    if (prev) await env.RATE.delete(`fail:${ip}`);
+    return { kind: 'password' };
   }
-  if (prev) await env.RATE.delete(`fail:${ip}`);
+  const mn = /^Pin (.{1,32})$/.exec(header);
+  if (mn) {
+    const glob = await readFails(env, PIN_GLOBAL_KEY);
+    const gl = lockError(glob, PIN_GLOBAL_MAX, PIN_GLOBAL_WINDOW_MS, 'PIN');
+    if (gl) throw gl;
+    const stored = await readPin(env);
+    // Luôn băm một lần (kể cả khi chưa đặt PIN) để thời gian phản hồi không lộ việc PIN đã được đặt hay chưa.
+    const salt = stored ? stored.salt : 'none';
+    const got = await hashPin(mn[1], salt);
+    const ok = !!stored && PIN_RE.test(mn[1]) && safeEqual(got, stored.hash);
+    if (!ok) {
+      await recordFail(env, `fail:${ip}`, prev, FAIL_WINDOW_MS);
+      if (stored) await recordFail(env, PIN_GLOBAL_KEY, glob, PIN_GLOBAL_WINDOW_MS);
+      throw new HttpError(401, 'unauthorized', 'Sai PIN.');
+    }
+    if (prev) await env.RATE.delete(`fail:${ip}`);
+    return { kind: 'pin' };
+  }
+  await recordFail(env, `fail:${ip}`, prev, FAIL_WINDOW_MS);
+  throw new HttpError(401, 'unauthorized', 'Thiếu thông tin đăng nhập.');
+}
+
+// Đặt / đổi / xoá PIN dự phòng. Chỉ cho phép khi đăng nhập bằng PASSWORD (PIN không tự đổi được PIN).
+async function setPin(env, request, auth) {
+  if (auth.kind !== 'password') throw new HttpError(403, 'password_required', 'Cần đăng nhập bằng password để đổi PIN.');
+  const body = await readBody(request);
+  if (typeof body.pin !== 'string' || !PIN_RE.test(body.pin)) throw new HttpError(400, 'bad_pin', 'PIN phải gồm 4–12 chữ số (khuyên dùng 6 số trở lên).');
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const salt = [...bytes].map((x) => x.toString(16).padStart(2, '0')).join('');
+  await env.RATE.put(PIN_KEY, JSON.stringify({ salt, hash: await hashPin(body.pin, salt), at: new Date().toISOString() }));
+  await env.RATE.delete(PIN_GLOBAL_KEY);
+  return { ok: true, pin_set: true };
+}
+async function deletePin(env, auth) {
+  if (auth.kind !== 'password') throw new HttpError(403, 'password_required', 'Cần đăng nhập bằng password để xoá PIN.');
+  await env.RATE.delete(PIN_KEY);
+  return { ok: true, pin_set: false };
 }
 
 // ---- GitHub API ----
@@ -204,29 +274,31 @@ async function addItems(env, request) {
       results[index] = { index, ok: false, reason: code, message };
     };
     if (!it || typeof it !== 'object') return reject('bad_item', 'Mục không hợp lệ.');
-    // Bỏ qua mọi provider/ref do client gửi: Worker tự parse lại từ url.
+    // Bỏ qua mọi provider/ref do client gửi (còn `referer` là trường riêng, được validate): Worker tự parse lại từ url.
     const p = parseLink(it.url, { allowedHosts });
     if (!p.ok) return reject(p.code, p.message);
     const o = validateOptions(it.options);
     if (!o.ok) return reject('bad_options', o.message);
     const l = validateLabel(it.label);
     if (!l.ok) return reject('bad_label', l.message);
-    cands.push({ index, id: newItemId(now), provider: p.provider, ref: p.ref, options: o.value, label: l.value });
+    const rp = validateRefPage(it.referer);
+    if (!rp.ok) return reject('bad_referer', rp.message);
+    cands.push({ index, id: newItemId(now), provider: p.provider, ref: p.ref, options: o.value, label: l.value, referer: rp.value });
   });
   if (!cands.length) return { results, added: 0, ...countOf({ items: [] }) };
 
   const out = await mutateQueue(env, `Thêm ${cands.length} mục vào hàng đợi`, (queue) => {
     // chuẩn hoá tuỳ chọn của mục cũ (thiếu khoá mới như phone) để so khớp đúng với mục mới
     const norm = (o) => { const v = validateOptions(o); return v.ok ? v.value : o; };
-    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, norm(i.options))));
+    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, norm(i.options), i.referer || null)));
     const res = [];
     let added = 0;
     for (const c of cands) {
-      const key = dedupeKey(c.provider, c.ref, c.options);
+      const key = dedupeKey(c.provider, c.ref, c.options, c.referer);
       if (keys.has(key)) res.push({ index: c.index, ok: false, reason: 'duplicate', message: 'Đã có mục giống hệt đang chờ trong hàng đợi.' });
       else if (queue.items.length >= LIMITS.maxQueue) res.push({ index: c.index, ok: false, reason: 'queue_full', message: `Hàng đợi đã đầy (${LIMITS.maxQueue} mục).` });
       else {
-        queue.items.push({ id: c.id, provider: c.provider, ref: c.ref, label: c.label, options: c.options, status: 'pending', attempts: 0, ladder_start: 0, last_error: null, added_at: now.toISOString() });
+        queue.items.push({ id: c.id, provider: c.provider, ref: c.ref, referer: c.referer, label: c.label, options: c.options, status: 'pending', attempts: 0, ladder_start: 0, last_error: null, added_at: now.toISOString() });
         keys.add(key);
         res.push({ index: c.index, ok: true, id: c.id, provider: c.provider });
         added++;
@@ -240,7 +312,7 @@ async function addItems(env, request) {
 
 async function patchItem(env, request, id) {
   const body = await readBody(request);
-  if (!('options' in body) && !('label' in body)) throw new HttpError(400, 'bad_request', 'Cần gửi options hoặc label.');
+  if (!('options' in body) && !('label' in body) && !('referer' in body)) throw new HttpError(400, 'bad_request', 'Cần gửi options, label hoặc referer.');
   return mutateQueue(env, `Sửa mục ${id}`, (queue) => {
     const it = queue.items.find((i) => i && i.id === id);
     if (!it) throw new HttpError(404, 'not_found', 'Không tìm thấy mục.');
@@ -255,6 +327,11 @@ async function patchItem(env, request, id) {
       const l = validateLabel(body.label);
       if (!l.ok) throw new HttpError(400, 'bad_label', l.message);
       it.label = l.value;
+    }
+    if ('referer' in body) {
+      const rp = validateRefPage(body.referer);
+      if (!rp.ok) throw new HttpError(400, 'bad_referer', rp.message);
+      it.referer = rp.value;
     }
     return { changed: true, out: { ok: true, item: it } };
   });
@@ -273,12 +350,13 @@ async function patchBatch(env, request) {
       const no = (reason, message) => results.push({ index, id: typeof id === 'string' ? id.slice(0, 40) : null, ok: false, reason, message });
       if (!ch || typeof ch !== 'object' || Array.isArray(ch)) { no('bad_item', 'Mục không hợp lệ.'); continue; }
       if (typeof id !== 'string' || !ID_RE.test(id)) { no('bad_id', 'id không hợp lệ.'); continue; }
-      if (!('options' in ch) && !('label' in ch)) { no('bad_request', 'Cần gửi options hoặc label.'); continue; }
+      if (!('options' in ch) && !('label' in ch) && !('referer' in ch)) { no('bad_request', 'Cần gửi options, label hoặc referer.'); continue; }
       const it = queue.items.find((i) => i && i.id === id);
       if (!it) { no('not_found', 'Không tìm thấy mục (có thể đã xong hoặc đã bị xóa).'); continue; }
       if (!['pending', 'failed'].includes(it.status)) { no('item_busy', 'Mục không ở trạng thái sửa được.'); continue; }
       let options = it.options;
       let label = it.label;
+      let referer = it.referer ?? null;
       if ('options' in ch) {
         if (!ch.options || typeof ch.options !== 'object' || Array.isArray(ch.options)) { no('bad_options', 'Tuỳ chọn không hợp lệ.'); continue; }
         const o = validateOptions({ ...it.options, ...ch.options });
@@ -290,8 +368,14 @@ async function patchBatch(env, request) {
         if (!l.ok) { no('bad_label', l.message); continue; }
         label = l.value;
       }
+      if ('referer' in ch) {
+        const rp = validateRefPage(ch.referer);
+        if (!rp.ok) { no('bad_referer', rp.message); continue; }
+        referer = rp.value;
+      }
       it.options = options;
       it.label = label;
+      it.referer = referer;
       results.push({ index, id, ok: true });
       updated++;
     }
@@ -387,7 +471,7 @@ async function status(env) {
   return data;
 }
 
-async function route(request, env, url) {
+async function route(request, env, url, auth) {
   const m = request.method;
   const p = url.pathname;
   const itemId = (re) => {
@@ -400,6 +484,12 @@ async function route(request, env, url) {
     const f = await readFile(env, 'queue.json');
     const q = f ? parseQueue(f.text) : { version: 1, items: [] };
     return { queue: q, counts: countOf(q) };
+  }
+  if (p === '/api/auth' && m === 'GET') return { kind: auth.kind, pin_set: !!(await readPin(env)) };
+  if (p === '/api/auth/pin') {
+    if (m === 'POST') return setPin(env, request, auth);
+    if (m === 'DELETE') return deletePin(env, auth);
+    throw new HttpError(405, 'method_not_allowed', 'Phương thức không được hỗ trợ.');
   }
   if (p === '/api/config' && m === 'GET') return { allowed_hosts: await getAllowedHosts(env), limits: { max_batch: LIMITS.maxBatch, max_queue: LIMITS.maxQueue } };
   if (p === '/api/queue/add' && m === 'POST') return addItems(env, request);
@@ -430,8 +520,8 @@ export async function handle(request, env) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env) });
   if (!url.pathname.startsWith('/api/')) return reply(env, 404, { error: 'not_found', message: 'Không có đường dẫn này.' });
   try {
-    await authenticate(request, env);
-    return reply(env, 200, await route(request, env, url));
+    const auth = await authenticate(request, env);
+    return reply(env, 200, await route(request, env, url, auth));
   } catch (e) {
     if (e instanceof HttpError) {
       return reply(env, e.status, { error: e.code, message: e.message, ...e.extra }, e.extra.retry_after ? { 'Retry-After': String(e.extra.retry_after) } : {});

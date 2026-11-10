@@ -35,7 +35,7 @@ Nếu đang có lần chạy `queued`/`in_progress`, trang sẽ hỏi lại trư
 4. Tạo **fine-grained PAT** chỉ cho repo này: Contents *Read and write*, Actions *Read and write*, Metadata *Read*.
 5. Triển khai Worker theo `worker/README.md`, rồi điền địa chỉ Worker vào `docs/config.js`.
 6. Nếu Worker dùng tên miền riêng, sửa `connect-src` trong thẻ CSP của `docs/index.html` thành đúng địa chỉ Worker.
-7. Mở trang Pages, nhập password (rồi đặt PIN), dán thử một link nhỏ, bấm "Lưu vào hàng đợi", sau đó bấm **"Chạy ngay"**.
+7. Mở trang Pages, nhập password (tick "Ghi nhớ" để lần sau tự vào; có thể đặt PIN dự phòng trong mục "PIN dự phòng"), dán thử một link nhỏ, bấm "Lưu vào hàng đợi", sau đó bấm **"Chạy ngay"**.
 8. Chạy thử không nén: Actions → "Nén video theo hàng đợi" → Run workflow → `mode = dry_run`.
 
 Kiểm thử: `node --test "tests/*.test.mjs" "worker/test/*.test.mjs"` (Node ≥ 20, không cần `npm install`).
@@ -74,6 +74,20 @@ Bật cho từng trang trong `config/allowed-hosts.json` bằng cờ `"ytdlp": t
 - Với YouTube, yt-dlp cần runtime JavaScript; workflow dùng Node có sẵn trên runner (`--js-runtimes node`).
 - Không tải playlist (`--no-playlist`), không dùng cookie, không vượt DRM. Video có DRM báo `drm_protected`.
 - **Lưu ý pháp lý:** tải từ trang web có thể vi phạm điều khoản của trang đó, và việc đăng lên release công khai làm rủi ro về bản quyền cao hơn. Chỉ dùng cho video bạn có quyền tải và phân phối. Tên file/tiêu đề release lấy từ tiêu đề video nếu bạn không đặt tên hiển thị, nên hãy đặt tên riêng nếu tiêu đề gốc không nên công khai.
+
+### Tải bằng trình duyệt thật (3 mức, tự leo thang)
+
+Một số web chỉ cho trình duyệt thật tải. Mỗi link có tuỳ chọn **"Cách tải"** và ô **"Trang mở trước"** (không bắt buộc):
+
+1. **Mức 1 – `curl` có header giống trình duyệt** (Accept, Accept-Language, Referer, Sec-Fetch-*, User-Agent Chrome). Nhanh, tải tiếp được khi đứt. Nếu web trả trang HTML/JSON với mã 200 thì file bị xoá và coi là "bị chặn".
+2. **Mức 2 – Chrome thật qua Playwright** (`scripts/browser-fetch.mjs`): mở "Trang mở trước" (nếu có) để lấy cookie/phiên, rồi mở link; thấy file thì bàn giao cho `curl` kèm cookie, thấy trang có video thì lấy luồng video. Link dùng một lần: để chính trình duyệt tải thẳng về đĩa. Luồng HLS/DASH giao cho `yt-dlp` kèm Referer/cookie.
+3. **Mức 3 – `yt-dlp`** cho trang không có link tải thẳng (như trước).
+
+"Cách tải": **Tự động** (mặc định: mức 1, bị chặn thì mức 2) / **Chỉ tải thường** (không bao giờ dùng trình duyệt) / **Luôn dùng trình duyệt**. Trường của mục tên `referer` (khoá `ref` đã dành cho tham chiếu của storage). Không có ô nhập cookie: cookie là bí mật mà `queue.json` lưu công khai trong repo. Kết quả ghi `fetch_method` (`curl`/`browser`/`ytdlp`/`gdown`), hiện ở cột "Cách tải" của mục lục, không ghi URL.
+
+Cấu hình: `config/tools.json` → `playwright_core.version` (cài lười, chỉ khi một mục cần); `config/settings.json` → `browser_headed` (mặc định `true`, chạy Chrome có giao diện qua `xvfb`; thiếu xvfb thì cài, không được thì lùi về headless và cảnh báo) và `browser_phase_min` (mặc định 3 phút cho phần mở trang + bắt link). Dùng Chrome có sẵn trên runner (không có thì thử cài Chromium của Playwright). Chrome chạy với `--no-sandbox` trên GitHub Actions vì Ubuntu 24.04 hạn chế user namespace; runner dùng một lần và chỉ mở link `https` đã kiểm tra, từ chối tải về file chương trình (`.exe`, `.sh`, `.apk`, `.msi`…).
+
+**Giới hạn thật:** web chặn theo **IP datacenter của GitHub runner** thì trình duyệt cũng không giúp được; không vượt được đăng nhập hay captcha; chế độ trình duyệt tốn thêm khoảng 1–2 phút; link token dùng một lần có thể hỏng nếu đã bị dùng ở bước dò; chỉ tải nội dung bạn có quyền tải. Phần trình duyệt chỉ được kiểm thử bằng Playwright giả; **chưa kiểm chứng trên runner thật**.
 
 ### allowed-hosts.json
 ```json
@@ -120,12 +134,13 @@ GitHub giới hạn **1000 file đính kèm mỗi release** và 2 GiB mỗi file
 - **Hạn mức ngày** `max_items_per_day` đếm **số video** đã đăng hôm nay (số asset bản thường trong release ngày, không tính `-phone.mp4` và file mục lục; cộng thêm release dạng cũ cùng ngày nếu có).
 - Release cũ dạng `vid-YYYYMMDD-HHMMSS-hash` **để nguyên**, không migrate; chúng không nằm trong mục lục, xem ở trang Releases của repo.
 
-## Khoá bằng PIN (bảo mật phía trình duyệt)
+## Password và PIN dự phòng
 
-- **Password** nhập một lần trên mỗi thiết bị (có tick "Ghi nhớ"). Trang không còn lưu password dạng thô: nó được mã hoá bằng **PIN 4–6 chữ số** (PBKDF2-SHA256 ≥ 600.000 vòng, salt ngẫu nhiên → AES-GCM) và lưu ở `localStorage` khoá `vc_vault`.
-- **PIN** phải nhập mỗi lần vào trang (kể cả F5/mở lại tab). Sai 5 lần thì két bị xoá và phải nhập lại password. "Quên PIN / đăng nhập bằng password" xoá két rồi đặt PIN mới. Nút **Khoá** xoá password khỏi bộ nhớ và về màn hình PIN; **Đăng xuất** xoá két. Worker trả 401 (đổi password) thì két bị xoá. Khoá `vc_password` của bản cũ được dùng để đăng nhập một lần, ép đặt PIN rồi bị xoá.
-- **Giới hạn cần biết:** đây là khoá phía trình duyệt, **không thay** password của Worker và **không phải** lớp xác thực thứ hai ở server. Ai chép được `localStorage` của bạn có thể dò PIN ngoại tuyến (PBKDF2 chỉ làm chậm), nên khuyên dùng PIN **6 chữ số**. Worker không đổi cho phần này.
-- Tuỳ chọn "Tuỳ chọn cho mục mới" được nhớ theo từng thiết bị (`localStorage` khoá `vc_defaults`, không đồng bộ giữa các máy).
+- **Password** (mặc định): tick "Ghi nhớ trên thiết bị này" thì lần sau mở trang là **tự vào luôn** (password được giữ trong `localStorage` khoá `vc_password` của máy đó; chỉ tick trên máy của bạn). Không tick thì mỗi lần mở trang phải nhập lại.
+- **PIN dự phòng** (4–12 chữ số, nên dùng 6 số trở lên) dùng khi **quên password**: ở màn hình đăng nhập bấm **"Quên password"**, nhập PIN là vào. PIN **lưu ở Cloudflare** (KV, dạng băm có salt) nên máy nào cũng dùng được. Vào bằng PIN chỉ có hiệu lực trong phiên đó: **PIN không bao giờ được nhớ trên máy**, lần sau mở trang vẫn hiện màn hình nhập password.
+- Đặt/đổi/xoá PIN: đăng nhập bằng **password**, mở mục "PIN dự phòng" trên trang. Vào bằng PIN thì không đổi/xoá được PIN (cần password). Cần chạy `wrangler deploy` một lần để Worker có tính năng này.
+- Chống dò PIN: sai 5 lần/15 phút theo IP bị khoá; ngoài ra có trần chung 20 lần sai/giờ cho mọi IP (PIN ngắn nên dễ bị dò từ nhiều IP). Khi chạm trần chung thì PIN tạm ngừng dùng được; password vẫn vào bình thường.
+- **Giới hạn cần biết:** PIN có quyền ngang password (kể cả bấm "Chạy ngay"), mà chỉ có vài chữ số nên yếu hơn password dài. Người lấy được dữ liệu KV có thể dò ngược PIN ngay. Nếu thấy rủi ro, đừng đặt PIN hoặc xoá nó. Bản cũ lưu PIN mã hoá ngay trên máy (`vc_vault`): bản này bỏ cách đó và tự xoá khoá cũ.
 
 ## Tuỳ chỉnh
 
@@ -148,6 +163,9 @@ BtbN giữ bản cuối mỗi tháng trong 2 năm và 14 bản daily gần nhấ
 | `not_direct_video`, `not_a_video` | Link không phải file video | Kiểm tra link |
 | `lfs_pointer` | Con trỏ Git LFS | Dùng link release |
 | `not_found`, `access_denied`, `rate_limited` | Lỗi từ nguồn | Kiểm tra link/quyền, thử lại sau |
+| `browser_failed` | Trình duyệt thật gặp lỗi chung (mở trang/tải) | Tự thử lại tới `max_attempts`; xem log |
+| `browser_no_video` | Mở được trang nhưng không thấy luồng video tải được, hoặc chỉ có `blob:` | Dán link tới file video, hoặc điền "Trang mở trước" |
+| `browser_unavailable` | Runner không có Chrome/Playwright/xvfb dùng được | Xem log bước cài trình duyệt; đây là lỗi cố định |
 | `ytdlp_unsupported`, `drm_protected` | yt-dlp không hỗ trợ trang, hoặc video có DRM | Thử `ytdlp_update_channel: nightly`; DRM thì không tải được |
 | `input_too_big`, `no_disk` | Vượt `max_input_gb` hoặc hết đĩa | Tăng giới hạn, bật `free_disk_space`, hoặc self-hosted |
 | `too_long` | Hết ladder tốc độ vẫn vượt ngân sách | Dùng self-hosted hoặc chia nhỏ video |

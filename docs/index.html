@@ -59,33 +59,20 @@ a{color:var(--accent)}
   <section>
     <label for="pw" class="muted">Password</label>
     <input id="pw" type="password" autocomplete="current-password" style="width:100%;margin:6px 0 10px">
-    <label class="row muted"><input id="remember" type="checkbox" checked> Ghi nhớ trên thiết bị này (bảo vệ bằng PIN)</label>
-    <div class="row" style="margin-top:12px"><button id="login" class="primary">Đăng nhập</button></div>
+    <label class="row muted"><input id="remember" type="checkbox" checked> Ghi nhớ trên thiết bị này (lần sau tự vào, chỉ tick trên máy của bạn)</label>
+    <div class="row" style="margin-top:12px"><button id="login" class="primary">Đăng nhập</button><button id="forgot">Quên password</button></div>
     <p id="lockmsg" class="msg" role="alert"></p>
   </section>
 </main>
 
 <main id="pinlock" hidden>
   <h1>Nén video</h1>
-  <p class="muted">Nhập PIN để mở khoá trên thiết bị này.</p>
+  <p class="muted">Nhập PIN dự phòng (lưu ở Cloudflare, dùng được từ mọi máy). Vào bằng PIN chỉ có hiệu lực trong phiên này: lần sau mở trang vẫn hỏi password.</p>
   <section>
-    <label for="pin" class="muted">PIN (4–6 chữ số)</label>
-    <input id="pin" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]*">
-    <div class="row"><button id="unlock" class="primary">Mở khoá</button><button id="forgot">Quên PIN / đăng nhập bằng password</button></div>
+    <label for="pin" class="muted">PIN</label>
+    <input id="pin" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" pattern="[0-9]*">
+    <div class="row"><button id="unlock" class="primary">Vào bằng PIN</button><button id="backpw">Quay lại nhập password</button></div>
     <p id="pinmsg" class="msg" role="alert"></p>
-  </section>
-</main>
-
-<main id="pinset" hidden>
-  <h1>Đặt PIN</h1>
-  <p class="muted">PIN mã hoá password đã nhớ trên máy này và phải nhập mỗi lần vào trang. Nên dùng 6 chữ số.</p>
-  <section>
-    <label for="pin1" class="muted">PIN mới (4–6 chữ số)</label>
-    <input id="pin1" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]*">
-    <label for="pin2" class="muted">Nhập lại PIN</label>
-    <input id="pin2" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]*">
-    <div class="row"><button id="savepin" class="primary">Lưu PIN</button><button id="cancelpin">Quay lại</button></div>
-    <p id="pinsetmsg" class="msg" role="alert"></p>
   </section>
 </main>
 
@@ -95,8 +82,23 @@ a{color:var(--accent)}
       <h1>Nén video</h1>
       <p>Dán link, chọn mức nén, lưu vào hàng đợi, rồi bấm <strong>Chạy ngay</strong>. Lưu chỉ lưu, không tự chạy. GitHub Actions sẽ nén và đưa kết quả lên Release.</p>
     </div>
-    <div class="row"><button id="lockbtn" hidden>Khoá</button><button id="logout">Đăng xuất</button></div>
+    <div class="row"><button id="logout">Đăng xuất</button></div>
   </header>
+  <p id="authnote" class="msg warn" hidden></p>
+
+  <section id="pinsec">
+    <details>
+      <summary>PIN dự phòng (khi quên password)</summary>
+      <p id="pinstate" class="muted"></p>
+      <p class="muted">PIN lưu ở Cloudflare nên máy nào cũng dùng được. Chỉ dùng khi quên password: bấm "Quên password" ở màn hình đăng nhập rồi nhập PIN. PIN không được nhớ trên máy và không đổi được PIN khác. Nên dùng 6 số trở lên.</p>
+      <label for="pin1" class="muted">PIN mới (4–12 chữ số)</label>
+      <input id="pin1" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" pattern="[0-9]*">
+      <label for="pin2" class="muted">Nhập lại PIN</label>
+      <input id="pin2" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" pattern="[0-9]*">
+      <div class="row"><button id="savepin" class="primary">Lưu PIN</button><button id="delpin" class="danger" hidden>Xoá PIN</button></div>
+      <p id="pinsetmsg" class="msg" role="status"></p>
+    </details>
+  </section>
 
   <section>
     <h2>Thêm link</h2>

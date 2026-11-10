@@ -21,5 +21,8 @@
     "tag": "2026.10.26",
     "asset": "yt-dlp_linux",
     "sha256": ""
+  },
+  "playwright_core": {
+    "version": "1.49.1"
   }
 }

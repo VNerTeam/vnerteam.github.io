@@ -25,24 +25,30 @@ wrangler deploy
 - Đổi password: chạy lại `hash-password.mjs`, đặt lại hai secret, đăng nhập lại trên trang.
 - Chống dò: từ 5 lần sai trong 15 phút theo IP → HTTP 429 kèm `Retry-After`. KV chỉ được ghi khi nhập sai. Nên thêm rate limiting rule của Cloudflare cho `/api/*` nếu gói của bạn cho phép.
 
+## PIN dự phòng
+
+PIN (4–12 chữ số) lưu trong KV `RATE` khoá `auth:pin` dưới dạng `SHA-256` có salt (không lưu PIN thô), nên dùng được từ mọi thiết bị. Đặt/đổi/xoá qua trang (đăng nhập bằng password) hoặc API: `POST /api/auth/pin {"pin":"123456"}`, `DELETE /api/auth/pin`; đăng nhập bằng PIN nhận `403 password_required`. `GET /api/auth` → `{ kind: "password"|"pin", pin_set }`. Chống dò: 5 lần sai/15 phút theo IP, cộng trần chung 20 lần sai/giờ cho PIN (khoá `fail:pin-global`); password không bị ảnh hưởng. Muốn tắt hẳn PIN: xoá trên trang, hoặc xoá khoá `auth:pin` trong KV.
+
 ## PAT
 
 Fine-grained PAT, **chỉ cấp cho đúng repo này**: Contents *Read and write*, Actions *Read and write*, Metadata *Read*. PAT có hạn dùng: khi GitHub trả 401/403 Worker báo "PAT hết hạn hoặc thiếu quyền". Đổi PAT: `wrangler secret put GITHUB_PAT`.
 
 ## API
 
-Mọi `/api/*` cần `Authorization: Bearer <password>` và `Origin` đúng `ALLOWED_ORIGIN`.
+Mọi `/api/*` cần `Origin` đúng `ALLOWED_ORIGIN` và một trong hai: `Authorization: Bearer <password>` hoặc `Authorization: Pin <mã PIN>` (PIN dự phòng, xem dưới).
 
 | Phương thức | Đường dẫn | Việc |
 |---|---|---|
-| POST | `/api/queue/add` | `{ items: [{ url, options, label? }] }`, tối đa 50 mục; Worker tự parse `url`, bỏ qua mọi `provider/ref` client gửi; một commit |
+| POST | `/api/queue/add` | `{ items: [{ url, options, label?, referer? }] }` (`referer` = "Trang mở trước", https, không phải host nội bộ), tối đa 50 mục; Worker tự parse `url`, bỏ qua mọi `provider/ref` client gửi; một commit |
 | GET | `/api/queue` | `queue.json` + số mục theo trạng thái |
-| PATCH | `/api/queue/item/:id` | Sửa `options`/`label` của một mục |
-| PATCH | `/api/queue/batch` | `{ changes: [{ id, options?, label? }] }`, tối đa 200 mục, áp trong **một lần ghi (một commit)**; mục sai/không tồn tại được báo riêng trong `results`, các mục còn lại vẫn áp. Trả `{ results, updated, counts }` |
+| PATCH | `/api/queue/item/:id` | Sửa `options`/`label`/`referer` của một mục |
+| PATCH | `/api/queue/batch` | `{ changes: [{ id, options?, label?, referer? }] }`, tối đa 200 mục, áp trong **một lần ghi (một commit)**; mục sai/không tồn tại được báo riêng trong `results`, các mục còn lại vẫn áp. Trả `{ results, updated, counts }` |
 | DELETE | `/api/queue/item/:id` | Xóa mục |
 | POST | `/api/queue/retry/:id` | `failed` → `pending` |
 | POST | `/api/run` | `workflow_dispatch` (`mode`, `only_id`) |
 | GET | `/api/status` | Các lần chạy gần nhất + `days` (khoảng 14 ngày gần nhất, mỗi video có link bản thường/bản điện thoại) đọc từ `catalog.json` của release `muc-luc`, kèm `catalog_url` (cache ~30 giây). Nếu chưa có hoặc hỏng catalog thì tạm liệt kê các release `vid-` (nhận cả tag ngày lẫn tag cũ), `source` là `releases` |
+| GET | `/api/auth` | Cách đăng nhập hiện tại và đã đặt PIN chưa |
+| POST / DELETE | `/api/auth/pin` | Đặt / xoá PIN dự phòng (chỉ khi đăng nhập bằng password) |
 | GET | `/api/config` | `allowed_hosts` đọc từ repo |
 
 `/api/queue/batch` chỉ ghi `queue.json`, **không** kích hoạt workflow; chỉ `POST /api/run` (nút "Chạy ngay") mới chạy.

@@ -1,6 +1,7 @@
 // resolve(provider, ref) → { kind: 'http', url, nameHint } | { kind: 'gdown', id, resourcekey }
 // Thêm provider mới: thêm 1 entry vào RESOLVERS (và matcher/check trong docs/lib/providers.mjs).
 import fs from 'node:fs';
+import { UA, browserHeaders } from './fetch-core.mjs';
 
 export class Fail extends Error {
   constructor(code, message, extra = {}) {
@@ -10,7 +11,6 @@ export class Fail extends Error {
   }
 }
 
-const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const e = encodeURIComponent;
 const encPath = (p) => p.split('/').map(e).join('/');
 const base = (p) => p.split('/').pop();
@@ -25,11 +25,13 @@ function directName(r) {
 const http = (url, nameHint = null) => ({ kind: 'http', url, nameHint });
 
 // ---- mạng: chỉ https, tối đa 5 lần chuyển hướng ----
-export async function fetchFollow(url, { headers = {}, maxRedirects = 5, stopAt = null } = {}) {
+// hop(url, i, prevUrl) (tuỳ chọn): trả về header riêng cho từng bước, để Referer của trang mở trước không lộ sang host khác sau chuyển hướng.
+export async function fetchFollow(url, { headers = {}, maxRedirects = 5, stopAt = null, hop = null } = {}) {
   let cur = url;
   const chain = [];
   for (let i = 0; i <= maxRedirects; i++) {
-    const res = await fetch(cur, { headers: { 'User-Agent': UA, ...headers }, redirect: 'manual', signal: AbortSignal.timeout(45000) });
+    const h = hop ? hop(cur, i, i ? (chain.length > 1 ? chain[chain.length - 2] : url) : null) : headers;
+    const res = await fetch(cur, { headers: { 'User-Agent': UA, ...h }, redirect: 'manual', signal: AbortSignal.timeout(45000) });
     const loc = res.headers.get('location');
     if (res.status >= 300 && res.status < 400 && loc) {
       const next = new URL(loc, cur);
@@ -74,11 +76,12 @@ export function headCheck(buf) {
   return { video: false, kind: kind || 'unknown' };
 }
 
-// Gửi request, đọc vài KB đầu, lấy Content-Type/Length và nhận diện magic bytes.
-export async function probeUrl(url, headers = {}) {
-  const { res, finalUrl } = await fetchFollow(url, { headers: { Range: 'bytes=0-4095', ...headers } });
+// Gửi request (header giống trình duyệt, kèm `ref` nếu có), đọc vài KB đầu, lấy Content-Type/Length và nhận diện magic bytes.
+// 401/403 → Fail access_denied có cờ blocked:true (để logic chọn mức biết là bị chặn chứ không phải link sai).
+export async function probeUrl(url, { ref = null } = {}) {
+  const { res, finalUrl, chain } = await fetchFollow(url, { hop: (u, i, prev) => ({ Range: 'bytes=0-4095', ...browserHeaders(u, { ref, first: url, prev }) }) });
   if (res.status === 404 || res.status === 410) throw new Fail('not_found', 'Link không còn tồn tại (404).');
-  if (res.status === 401 || res.status === 403) throw new Fail('access_denied', `Không có quyền tải (HTTP ${res.status}).`);
+  if (res.status === 401 || res.status === 403) throw new Fail('access_denied', `Không có quyền tải (HTTP ${res.status}).`, { blocked: true });
   if (res.status === 429) throw new Fail('rate_limited', 'Nguồn đang giới hạn tốc độ (HTTP 429), thử lại sau.');
   if (res.status >= 400) throw new Fail(`http_${res.status}`, `Nguồn trả lỗi HTTP ${res.status}.`);
   const ctype = (res.headers.get('content-type') || '').toLowerCase();
@@ -96,7 +99,8 @@ export async function probeUrl(url, headers = {}) {
   await reader.cancel().catch(() => {});
   const head = Buffer.concat(parts);
   const c = headCheck(head);
-  return { ...c, ctype, size, finalUrl, head };
+  const prevUrl = chain.length > 1 ? chain[chain.length - 2] : url;
+  return { ...c, ctype, size, finalUrl, prevUrl, head };
 }
 
 async function getJson(url) {

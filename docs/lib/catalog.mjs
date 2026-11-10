@@ -149,6 +149,8 @@ export function entryRow(e, repo) {
   return `| ${mdEsc(e.time || '')} | ${mdEsc(e.name || e.main.name)} | ${fileCell(e.main, repo, e.tag)} | ${fileCell(e.phone, repo, e.tag)} | ${Number.isFinite(e.duration) ? fmtDur(e.duration) : ''} |`;
 }
 
+const FETCH_METHOD_LABEL = { curl: 'Tải thường (curl)', browser: 'Trình duyệt thật', ytdlp: 'yt-dlp', gdown: 'gdown' };
+
 // Khối kỹ thuật cho từng video (bảng cũ của release).
 export function techDetails(e) {
   if (!e.tech && !e.phone_skipped && !(e.notes && e.notes.length)) return '';
@@ -170,6 +172,7 @@ export function techDetails(e) {
   add('Phiên bản', t.tools ? mdEsc(t.tools) : '');
   add('Thời điểm', t.at ? mdEsc(t.at) : '');
   add('Nguồn', t.source ? mdEsc(t.source) : '');
+  add('Cách tải', FETCH_METHOD_LABEL[t.fetch_method] || '');
   add('SHA256', t.sha256 ? `\`${String(t.sha256).replace(/[^0-9a-f]/gi, '')}\`` : '');
   const notes = (e.notes || []).map((n) => `- ${mdEsc(n)}`);
   const body = [...(rows.length ? ['| Mục | Giá trị |', '|---|---|', ...rows] : []), ...(notes.length ? ['', ...notes] : [])].join('\n');

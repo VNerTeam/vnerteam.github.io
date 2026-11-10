@@ -12,6 +12,7 @@ const execFileP = promisify(execFile);
 export const DEFAULT_SETTINGS = {
   runner_label: 'ubuntu-latest', max_parallel: 2, max_items_per_run: 10, max_items_per_day: 10, time_budget_min: 270, reserve_min: 20,
   max_input_gb: 6, min_vmaf_floor: 88, free_disk_space: false, timezone: 'Asia/Ho_Chi_Minh', max_attempts: 3, max_chain: 30, ytdlp_update_channel: 'stable',
+  browser_headed: true, browser_phase_min: 3,
 };
 
 export const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -20,6 +21,8 @@ export function loadSettings() {
   const s = { ...DEFAULT_SETTINGS, ...readJson('config/settings.json') };
   s.max_parallel = Math.min(Math.max(1, Math.floor(s.max_parallel)), 20); // trần 20 của plan Free
   s.time_budget_min = Math.min(Math.max(240, s.time_budget_min), 300);
+  s.browser_headed = s.browser_headed !== false;
+  s.browser_phase_min = Math.min(Math.max(1, Number(s.browser_phase_min) || 3), 10); // giai đoạn mở trang + bắt link của mức 2
   return s;
 }
 export const loadProfiles = () => readJson('config/profiles.json');

@@ -3,10 +3,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadSettings, loadProfiles, loadAllowedHosts, run, gh, spawnStream, killAll, log, mask, fmtBytes, fmtDur, slugify, tzParts, sha256File, freeBytes, sleep, getReleaseByTag } from './util.mjs';
+import { loadSettings, loadProfiles, loadAllowedHosts, readJson, run, gh, spawnStream, killAll, log, mask, fmtBytes, fmtDur, slugify, tzParts, sha256File, freeBytes, sleep, getReleaseByTag } from './util.mjs';
 import { validateItem } from '../docs/lib/schema.mjs';
 import { PROVIDERS } from '../docs/lib/providers.mjs';
 import { Fail, resolve, probeUrl, headCheck, secretsOf, fileHead } from './resolvers.mjs';
+import { UA, browserHeaders, curlHeaderArgs, shouldFallbackToBrowser, probeVerdict, assessDownloadedHead, RETRYABLE_ERRORS } from './fetch-core.mjs';
+import { ensureBrowser } from './browser-setup.mjs';
 import { parseCrfSearch } from './parse.mjs';
 import { makePlan, buildPhoneArgs, verifyPhone } from './encode-plan.mjs';
 import { dayTagOf, dayTitle, dateDash, assetNames, isMainAsset, tzHM, downloadUrl } from '../docs/lib/catalog.mjs';
@@ -15,7 +17,6 @@ const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
 const ASSET_LIMIT = 2 * GiB - 16 * MiB; // giới hạn 2 GiB/asset, trừ biên an toàn
 const HARD_CAP_MS = 340 * 60 * 1000; // trần 6 giờ của GitHub, chừa 20 phút
-const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 const settings = loadSettings();
 const profiles = loadProfiles();
@@ -166,25 +167,117 @@ async function encode(ctx, crf, step) {
 }
 
 // ---------- tải ----------
-async function download(plan, dest, maxBytes, timeoutMs) {
-  if (plan.kind === 'http') {
-    const args = ['--fail', '--location', '--max-redirs', '5', '--proto', '=https', '--proto-redir', '=https', '--retry', '5', '--retry-all-errors', '--retry-delay', '5',
-      '-C', '-', '--connect-timeout', '30', '--speed-limit', '1024', '--speed-time', '180', '--silent', '--show-error', '-A', UA];
-    if (maxBytes) args.push('--max-filesize', String(maxBytes));
-    args.push('-o', dest, plan.url);
-    const r = await spawnStream('curl', args, { timeoutMs });
-    if (r.timedOut) throw new Fail('timeout', 'Hết thời gian khi tải.');
-    if (r.code === 63) throw new Fail('input_too_big', `File nguồn lớn hơn ${settings.max_input_gb} GB.`);
-    if (r.code !== 0) {
-      const m = /error: (\d{3})/.exec(r.stderr);
-      const code = m ? Number(m[1]) : 0;
-      if (code === 404 || code === 410) throw new Fail('not_found', 'Link không còn tồn tại.');
-      if (code === 401 || code === 403) throw new Fail('access_denied', 'Không có quyền tải file.');
-      if (code === 429) throw new Fail('rate_limited', 'Nguồn giới hạn tốc độ, thử lại sau.');
-      throw new Fail('download_failed', `curl lỗi ${r.code}: ${r.stderr.trim().split('\n').slice(-1)[0].slice(0, 160)}`);
-    }
-    return;
+const budgetDl = () => Math.min(budgetMs(), hardMs() - 10 * 60000);
+
+// Kiểm tra vài KB đầu của file vừa tải. HTML/JSON (web trả mã 200 kèm trang chặn) → xoá file, báo "bị chặn" để logic chọn mức biết.
+function checkDownloaded(dest) {
+  try {
+    assessDownloadedHead(headCheck(fileHead(dest)), (c, m, x) => new Fail(c, m, x));
+  } catch (e) {
+    fs.rmSync(dest, { force: true });
+    throw e;
   }
+}
+
+// Mức 1: curl có header giống trình duyệt, tải tiếp được khi đứt (-C -).
+async function curlGet({ url, dest, maxBytes, timeoutMs, headers, ua = UA, cookiesFile = null }) {
+  const args = ['--fail', '--location', '--max-redirs', '5', '--proto', '=https', '--proto-redir', '=https', '--retry', '5', '--retry-all-errors', '--retry-delay', '5',
+    '-C', '-', '--connect-timeout', '30', '--speed-limit', '1024', '--speed-time', '180', '--silent', '--show-error', '-A', ua, ...curlHeaderArgs(headers)];
+  if (cookiesFile) args.push('-b', cookiesFile);
+  if (maxBytes) args.push('--max-filesize', String(maxBytes));
+  args.push('-o', dest, url);
+  const r = await spawnStream('curl', args, { timeoutMs });
+  if (r.timedOut) throw new Fail('timeout', 'Hết thời gian khi tải.');
+  if (r.code === 63) throw new Fail('input_too_big', `File nguồn lớn hơn ${settings.max_input_gb} GB.`);
+  if (r.code !== 0) {
+    const m = /error: (\d{3})/.exec(r.stderr);
+    const code = m ? Number(m[1]) : 0;
+    if (code === 404 || code === 410) throw new Fail('not_found', 'Link không còn tồn tại.');
+    if (code === 401 || code === 403) throw new Fail('access_denied', 'Không có quyền tải file.', { blocked: true });
+    if (code === 429) throw new Fail('rate_limited', 'Nguồn giới hạn tốc độ, thử lại sau.');
+    throw new Fail('download_failed', `curl lỗi ${r.code}: ${r.stderr.trim().split('\n').slice(-1)[0].slice(0, 160)}`);
+  }
+  checkDownloaded(dest);
+}
+
+// Mức 2: Chrome thật qua Playwright (scripts/browser-fetch.mjs), chạy như tiến trình con.
+const BF_PASS = new Set(['browser_failed', 'browser_no_video', 'browser_unavailable', 'access_denied', 'not_found', 'rate_limited', 'timeout', 'input_too_big', 'not_a_video']);
+async function runBrowser(setup, job, timeoutMs) {
+  const [cmd, args] = setup.headed ? [setup.xvfb, ['-a', process.execPath, 'scripts/browser-fetch.mjs']] : [process.execPath, ['scripts/browser-fetch.mjs']];
+  const r = await spawnStream(cmd, args, {
+    env: { BF_JOB: JSON.stringify(job), ...(process.env.PLAYWRIGHT_BROWSERS_PATH ? { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH } : {}) },
+    timeoutMs,
+    // Lệnh che (::add-mask::) do tiến trình con in ra phải được chuyển tiếp lên log của runner thì mới có tác dụng.
+    onLine: (l) => {
+      if (l.startsWith('::add-mask::')) console.log(l);
+      else if (l.startsWith('[trình duyệt]')) log(l);
+    },
+  });
+  if (r.timedOut) throw new Fail('browser_failed', 'Hết thời gian ở bước trình duyệt.');
+  const line = r.stdout.split('\n').reverse().find((l) => l.startsWith('{"bf":1'));
+  let res = null;
+  try {
+    res = line ? JSON.parse(line) : null;
+  } catch { /* để xuống phần lỗi */ }
+  if (!res) throw new Fail('browser_failed', `Trình duyệt thoát (mã ${r.code}) mà không trả kết quả.`);
+  for (const k of ['url', 'referer']) if (typeof res[k] === 'string') mask(res[k]);
+  if (!res.ok) throw new Fail(BF_PASS.has(res.code) ? res.code : 'browser_failed', String(res.message || '').slice(0, 200), res.blocked ? { blocked: true } : {});
+  return res;
+}
+
+async function browserDownload(plan, dest, maxBytes, ctx) {
+  const bdir = path.join(workDir, 'bf'); // nằm trong thư mục tạm của mục nên được dọn cùng
+  const version = readJson('config/tools.json').playwright_core?.version;
+  if (!version) throw new Fail('browser_unavailable', 'Thiếu playwright_core.version trong config/tools.json.');
+  const setup = await ensureBrowser({ dir: bdir, version, wantHeaded: settings.browser_headed });
+  const phaseMs = Math.min(settings.browser_phase_min * 60000, budgetDl());
+  if (phaseMs < 60000) throw new Fail('timeout', 'Không còn đủ thời gian để mở trình duyệt.');
+  const job = { url: plan.url, ref: ctx.referer, dir: path.join(bdir, 'run'), chrome: setup.chrome, pwDir: setup.pwDir, headed: setup.headed, noSandbox: process.env.GITHUB_ACTIONS === 'true', maxBytes: maxBytes || ctx.maxIn, phaseMs };
+  const res = await runBrowser(setup, job, phaseMs + 60000);
+  const dropCookies = () => { if (res.cookiesFile) fs.rmSync(res.cookiesFile, { force: true }); };
+  try {
+    if (res.kind === 'stream') {
+      // HLS/DASH: giao cho yt-dlp, kèm Referer/User-Agent/cookie lấy từ trình duyệt.
+      const extra = ['--add-header', `Referer:${res.referer}`, '--user-agent', res.ua, ...(res.cookiesFile ? ['--cookies', res.cookiesFile] : [])];
+      const y = await downloadYtdlp({ kind: 'ytdlp', url: res.url }, workDir, ctx.maxIn, extra);
+      return { method: 'ytdlp', file: y.file, nameHint: y.title };
+    }
+    try {
+      await curlGet({ url: res.url, dest, maxBytes, timeoutMs: budgetDl(), headers: browserHeaders(res.url, { ref: res.referer }), ua: res.ua, cookiesFile: res.cookiesFile });
+      return { method: 'browser', file: dest, nameHint: res.name || null };
+    } catch (e) {
+      if (!(e instanceof Fail) || e.blocked !== true) throw e;
+      // Link dùng một lần (token): để chính trình duyệt tải thẳng về đĩa.
+      log('Bàn giao cho curl vẫn bị chặn → tải thẳng bằng trình duyệt.');
+      fs.rmSync(dest, { force: true });
+      const r2 = await runBrowser(setup, { ...job, save: true, dest, totalMs: budgetDl() }, budgetDl() + 60000);
+      checkDownloaded(dest);
+      return { method: 'browser', file: dest, nameHint: r2.name || res.name || null };
+    }
+  } finally {
+    dropCookies();
+  }
+}
+
+// Chọn mức theo fetch_mode: auto = curl trước, bị chặn thì trình duyệt; curl = không bao giờ dùng trình duyệt; browser = bỏ qua mức 1.
+async function downloadHttp(plan, dest, maxBytes, ctx) {
+  if (ctx.mode !== 'browser' && !ctx.deferred) {
+    const url = (ctx.probe && ctx.probe.finalUrl) || plan.url;
+    const redirected = url !== plan.url;
+    const headers = browserHeaders(url, { ref: ctx.referer, first: plan.url, prev: redirected ? ctx.probe.prevUrl : null });
+    try {
+      await curlGet({ url, dest, maxBytes, timeoutMs: budgetDl(), headers });
+      return { method: 'curl', file: dest };
+    } catch (e) {
+      if (!(e instanceof Fail) || !shouldFallbackToBrowser(e, ctx.mode)) throw e;
+      log(`Tải thường bị chặn (${e.code}) → chuyển sang trình duyệt thật.`);
+      fs.rmSync(dest, { force: true });
+    }
+  } else if (ctx.mode === 'auto') log('Bước kiểm tra cho thấy link bị chặn hoặc là trang web → dùng thẳng trình duyệt thật.');
+  return browserDownload(plan, dest, maxBytes, ctx);
+}
+
+async function downloadGdown(plan, dest, timeoutMs) {
   const url = `https://drive.google.com/uc?id=${plan.id}${plan.resourcekey ? `&resourcekey=${plan.resourcekey}` : ''}`;
   mask(url);
   // -O <thư mục>/ để gdown giữ nguyên tên file gốc trên Drive (dùng làm tên gợi ý cho video)
@@ -243,13 +336,13 @@ async function updateYtdlp() {
   result.ytdlp_updated_to = newV;
   return bin;
 }
-async function ytdlpOnce(plan, dir, maxBytes) {
+async function ytdlpOnce(plan, dir, maxBytes, extra = []) {
   const timeoutMs = Math.min(budgetMs(), hardMs() - 10 * 60000);
   if (timeoutMs < 60000) throw new Fail('timeout', 'Không còn đủ thời gian để tải.');
   const titleFile = path.join(dir, 'title.txt');
   const args = ['--ignore-config', '--no-playlist', '--no-cache-dir', '--no-mtime', '--no-progress', '--socket-timeout', '30', '--retries', '5', '--fragment-retries', '5',
     '--js-runtimes', 'node', '-f', 'bv*+ba/b', '--merge-output-format', 'mkv', '--max-filesize', String(maxBytes), '--print-to-file', '%(title)s', titleFile,
-    '-o', path.join(dir, 'input.%(ext)s'), '--', plan.url];
+    ...extra, '-o', path.join(dir, 'input.%(ext)s'), '--', plan.url];
   const r = await spawnStream(ytdlpBin, args, { timeoutMs, onLine: (l) => /^(ERROR|WARNING)/.test(l) && log(`  yt-dlp: ${l.slice(0, 200)}`) });
   if (r.timedOut) throw new Fail('timeout', 'Hết thời gian khi tải.');
   const text = `${r.stdout}\n${r.stderr}`;
@@ -265,15 +358,15 @@ async function ytdlpOnce(plan, dir, maxBytes) {
   } catch { /* không có tiêu đề */ }
   return { ok: true, file: path.join(dir, pick), title };
 }
-async function downloadYtdlp(plan, dir, maxBytes) {
-  let a = await ytdlpOnce(plan, dir, maxBytes);
+async function downloadYtdlp(plan, dir, maxBytes, extra = []) {
+  let a = await ytdlpOnce(plan, dir, maxBytes, extra);
   if (!a.ok && YTDLP_RETRY.includes(a.code)) {
     log(`Tải lỗi (${a.code}). Thử cập nhật yt-dlp lên bản mới nhất rồi tải lại…`);
     const nb = await updateYtdlp();
     if (nb) {
       ytdlpBin = nb;
       for (const f of fs.readdirSync(dir)) if (f.startsWith('input.')) fs.rmSync(path.join(dir, f), { force: true });
-      a = await ytdlpOnce(plan, dir, maxBytes);
+      a = await ytdlpOnce(plan, dir, maxBytes, extra);
     }
   }
   if (!a.ok) throw new Fail(a.code, a.message);
@@ -471,11 +564,35 @@ async function processItem(item) {
   // resolve + kiểm tra link
   const plan0 = await resolve(item.provider, item.ref);
   for (const s of [plan0.url, ...(plan0.secrets || [])]) mask(s);
+  const mode = opt.fetch_mode || 'auto';
+  const referer = item.referer || null;
+  if (referer) mask(referer);
   let remote = null;
-  if (plan0.kind === 'http') {
-    const p = await probeUrl(plan0.url);
-    if (!p.video) throw new Fail('not_direct_video', `Link không trỏ tới file video (nhận được ${p.ctype || p.kind}).`);
-    remote = p.size;
+  let probe = null;
+  let deferred = false;
+  if (plan0.kind === 'http' && mode !== 'browser') {
+    let outcome;
+    let perr = null;
+    try {
+      probe = await probeUrl(plan0.url, { ref: referer });
+      if (probe.finalUrl) mask(probe.finalUrl);
+      outcome = probe.video ? { video: true } : { video: false, kind: probe.kind };
+    } catch (e) {
+      if (!(e instanceof Fail)) throw e;
+      perr = e;
+      outcome = { error: e.code };
+    }
+    const verdict = probeVerdict(outcome, mode);
+    if (verdict === 'reject') {
+      if (perr) throw perr;
+      throw new Fail('not_direct_video', `Link không trỏ tới file video (nhận được ${probe.ctype || probe.kind}).`);
+    }
+    if (verdict === 'defer') {
+      // Chưa chắc chắn (403 hoặc nhận trang web): để bước tải quyết định thay vì từ chối ngay.
+      deferred = true;
+      probe = null;
+      log('Bước kiểm tra chưa chắc chắn (bị chặn hoặc nhận trang web), để bước tải quyết định.');
+    } else remote = probe.size;
   }
   const maxIn = settings.max_input_gb * GiB;
   if (remote && remote > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(remote)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);
@@ -492,7 +609,18 @@ async function processItem(item) {
     raw = y.file;
     plan0.nameHint = y.title;
     ytdlpVer = await ytdlpVersion(ytdlpBin);
-  } else await download(plan0, raw, remote ? null : maxIn, Math.min(budgetMs(), hardMs() - 10 * 60000));
+    result.fetch_method = 'ytdlp';
+  } else if (plan0.kind === 'gdown') {
+    await downloadGdown(plan0, raw, Math.min(budgetMs(), hardMs() - 10 * 60000));
+    result.fetch_method = 'gdown';
+  } else {
+    const d = await downloadHttp(plan0, raw, remote ? null : maxIn, { mode, referer, probe, deferred, maxIn });
+    raw = d.file;
+    if (d.nameHint) plan0.nameHint = d.nameHint;
+    if (d.method === 'ytdlp') ytdlpVer = await ytdlpVersion(ytdlpBin);
+    result.fetch_method = d.method;
+  }
+  log(`Cách tải: ${result.fetch_method}`);
   const inSize = fs.statSync(raw).size;
   if (inSize > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(inSize)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);
   const hc = headCheck(fileHead(raw));
@@ -580,7 +708,7 @@ async function processItem(item) {
     notes: [...plan.notes],
     tech: {
       res_in: `${a.width}x${a.height}`, res_out: `${o2.width}x${o2.height}`, codec_label: `${opt.codec.toUpperCase()} (${step.encoder})`, crf: search.crf, vmaf_target: minVmaf, vmaf_pred: search.vmaf,
-      quality_label: Q_LABEL[opt.quality], preset: String(step.preset), encode_seconds: encSeconds,
+      quality_label: Q_LABEL[opt.quality], fetch_method: result.fetch_method, preset: String(step.preset), encode_seconds: encSeconds,
       tools: `${toolVer.ffmpeg}; ab-av1 ${toolVer.abav1}${ytdlpVer ? `; yt-dlp ${ytdlpVer}` : ''}`, at: info.at, source: PROVIDERS[item.provider].label, sha256: sha,
     },
   });
@@ -632,7 +760,8 @@ async function main() {
     result.error = e instanceof Fail ? e.code : 'internal';
     result.detail = String(e.message || e).slice(0, 300);
     if (Number.isInteger(e.ladder_start)) result.ladder_start = e.ladder_start;
-        console.error(`::error::${result.error}: ${result.detail}`);
+    if (RETRYABLE_ERRORS.has(result.error)) result.retryable = true; // chỉ browser_failed được thử lại (theo max_attempts)
+    console.error(`::error::${result.error}: ${result.detail}`);
   } finally {
     cleanupSync();
     log(fs.existsSync(workDir) ? `⚠️ Chưa dọn được ${workDir}` : `Đã dọn thư mục tạm của mục ${item.id}.`);

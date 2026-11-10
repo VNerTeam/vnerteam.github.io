@@ -95,6 +95,19 @@ Cấu hình: `config/tools.json` → `playwright_core.version` (cài lười, ch
 ```
 `*.suffix` chỉ khớp tên miền con. Worker đọc file này từ repo (cache 60 giây), không cần triển khai lại.
 
+#### Trang có nút tải: `link_class` + "Lọc link"
+
+Với web mà link tải nằm trong thẻ `<a>` (thường kèm token nên không dán thẳng được), thêm `link_class` cho host:
+
+```json
+{ "host": "phim.example", "allow_query": false, "link_class": "download-btn" }
+```
+
+- Dán **link trang** (không phải link file). Khi chạy, hệ thống mở trang, tìm thẻ `<a>` có class đó, lấy `href` **ngay lúc tải** (token còn mới) rồi tải kèm cookie và Referer của trang. Có thể ghi nhiều class cách nhau dấu cách (thẻ phải có đủ các class). `link_class` thắng `ytdlp` nếu host có cả hai; class sai định dạng thì bị bỏ qua và host chạy như thường.
+- **Lọc link** (ô nhập riêng cho từng link kiểu này, cạnh "Trang mở trước"): khi nhiều thẻ `<a>` cùng class (vd 3 độ phân giải), gõ phần có trong link cần lấy, vd `2160p.mp4` hoặc `shenhe8_2160p`. So khớp theo chuỗi con, không phân biệt hoa thường. Bỏ trống thì lấy link đầu tiên; không link nào khớp thì báo `link_not_found`. (Đây là trường riêng của mục chứ không phải một lựa chọn trong menu "Tuỳ chọn", vì là chuỗi tự do.)
+- Cách tải theo "Cách tải": **Chỉ tải thường** đọc HTML bằng `fetch` (không chạy JavaScript); **Tự động** thử vậy trước, không thấy thẻ hoặc bị chặn thì mở Chrome thật (đọc được cả nút do JavaScript dựng); **Luôn dùng trình duyệt** vào thẳng Chrome. Link token dùng một lần mà vẫn bị chặn thì trình duyệt tự mở lại trang và bấm link mới để tải thẳng về.
+- Hạn chế: chỉ đọc thẻ `<a>` trong trang chính (và các khung con khi dùng trình duyệt), không bấm nút qua JavaScript; nút "tải" không phải thẻ `<a>`, đếm ngược chờ vài chục giây, hoặc captcha thì chưa xử lý được. Đổi/xoá `link_class` trong file này thì các mục đang chờ của host đó thành sai định dạng.
+
 ## Đầu ra: bản thường + bản điện thoại
 
 Mỗi video cho tối đa **hai file** trong cùng một release:
@@ -163,6 +176,7 @@ BtbN giữ bản cuối mỗi tháng trong 2 năm và 14 bản daily gần nhấ
 | `not_direct_video`, `not_a_video` | Link không phải file video | Kiểm tra link |
 | `lfs_pointer` | Con trỏ Git LFS | Dùng link release |
 | `not_found`, `access_denied`, `rate_limited` | Lỗi từ nguồn | Kiểm tra link/quyền, thử lại sau |
+| `link_not_found` | Không thấy thẻ `<a>` có class cấu hình (hoặc không link nào chứa "Lọc link") | Kiểm tra `link_class` và ô "Lọc link"; thử "Luôn dùng trình duyệt" nếu nút do JavaScript dựng. Lỗi cố định |
 | `browser_failed` | Trình duyệt thật gặp lỗi chung (mở trang/tải) | Tự thử lại tới `max_attempts`; xem log |
 | `browser_no_video` | Mở được trang nhưng không thấy luồng video tải được, hoặc chỉ có `blob:` | Dán link tới file video, hoặc điền "Trang mở trước" |
 | `browser_unavailable` | Runner không có Chrome/Playwright/xvfb dùng được | Xem log bước cài trình duyệt; đây là lỗi cố định |

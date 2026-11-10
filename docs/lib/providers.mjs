@@ -13,6 +13,7 @@ export const PROVIDERS = {
   internet_archive: { label: 'Internet Archive', experimental: false },
   direct_url: { label: 'Link trực tiếp', experimental: false },
   ytdlp: { label: 'Trang video (yt-dlp)', experimental: true },
+  page_link: { label: 'Trang có nút tải (theo class)', experimental: true },
   onedrive: { label: 'OneDrive (cá nhân)', experimental: true },
 };
 export const PROVIDER_IDS = Object.keys(PROVIDERS);
@@ -83,8 +84,19 @@ export function matchAllowedHost(host, list) {
   return null;
 }
 
-// direct_url và ytdlp dùng chung: host phải nằm trong allowlist; cờ "ytdlp": true quyết định loại.
-function webRef(r, ctx, wantYtdlp) {
+// "link_class" của một host trong allowed-hosts.json: tên class (một hoặc vài class cách nhau bằng dấu cách) của thẻ <a> chứa link tải.
+// Trả về mảng class hợp lệ, hoặc null nếu không có/không hợp lệ (khi đó host được xử lý như bình thường).
+const CLASS_TOKEN = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
+export function parseLinkClass(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().split(/\s+/).filter(Boolean);
+  if (!t.length || t.length > 5 || !t.every((x) => CLASS_TOKEN.test(x))) return null;
+  return t;
+}
+export const entryKind = (entry) => (parseLinkClass(entry && entry.link_class) ? 'page' : entry && entry.ytdlp === true ? 'ytdlp' : 'direct');
+
+// direct_url, ytdlp và page_link dùng chung: host phải nằm trong allowlist; link_class → page_link, ytdlp:true → ytdlp, còn lại → direct_url.
+function webRef(r, ctx, want) {
   exact(r, ['host', 'path', 'query']);
   need(RE.host, r.host, 'Máy chủ');
   if (typeof r.path !== 'string' || r.path.length > 1500 || !RE.dpath.test(r.path) || r.path.includes('..') || r.path.includes('//')) {
@@ -92,7 +104,10 @@ function webRef(r, ctx, wantYtdlp) {
   }
   const entry = matchAllowedHost(r.host, ctx && ctx.allowedHosts);
   if (!entry) bad('host_not_allowed', 'Máy chủ này chưa nằm trong config/allowed-hosts.json.');
-  if ((entry.ytdlp === true) !== wantYtdlp) bad('host_not_allowed', wantYtdlp ? 'Máy chủ này chưa bật "ytdlp": true trong config/allowed-hosts.json.' : 'Máy chủ này được cấu hình cho yt-dlp, không phải link tải trực tiếp.');
+  if (entryKind(entry) !== want) {
+    const msg = { page: 'Máy chủ này chưa đặt "link_class" trong config/allowed-hosts.json.', ytdlp: 'Máy chủ này chưa bật "ytdlp": true trong config/allowed-hosts.json.', direct: 'Máy chủ này được cấu hình cho yt-dlp hoặc link_class, không phải link tải trực tiếp.' };
+    bad('host_not_allowed', msg[want]);
+  }
   if (r.query !== null) {
     if (!entry.allow_query) bad('query_not_allowed', 'Máy chủ này không cho phép tham số sau dấu ?.');
     if (typeof r.query !== 'string' || r.query.length > 1500 || !RE.dquery.test(r.query) || r.query.includes('..')) bad('bad_ref', 'Tham số không hợp lệ.');
@@ -149,10 +164,13 @@ const CHECKS = {
     pathOf(r.file, 'Tên file');
   },
   direct_url(r, ctx) {
-    webRef(r, ctx, false);
+    webRef(r, ctx, 'direct');
   },
   ytdlp(r, ctx) {
-    webRef(r, ctx, true);
+    webRef(r, ctx, 'ytdlp');
+  },
+  page_link(r, ctx) {
+    webRef(r, ctx, 'page');
   },
   onedrive(r) {
     if (r && r.kind === 'short') {
@@ -347,6 +365,7 @@ export function summarize(provider, r) {
     case 'huggingface': return cut(`${r.repo} • ${r.path}`);
     case 'internet_archive': return cut(`${r.identifier} • ${r.file}`);
     case 'direct_url':
+    case 'page_link':
     case 'ytdlp': return cut(`${r.host}${r.path}`);
     case 'onedrive': return r.kind === 'short' ? cut(`1drv.ms${r.path}`) : `resid …${r.resid.slice(-6)}`;
     default: return '';
@@ -366,7 +385,8 @@ export function parseLink(raw, { allowedHosts = [] } = {}) {
       if (!entry) bad('host_not_allowed', `Máy chủ ${c.host} chưa được hỗ trợ. Nếu là máy chủ của bạn, hãy thêm vào config/allowed-hosts.json.`);
       const query = c.u.search ? c.u.search.slice(1) : null;
       if (query && !entry.allow_query) bad('query_not_allowed', 'Link có tham số sau dấu ? (với link tải trực tiếp thường là link ký sẵn, sẽ hết hạn). Máy chủ này không bật allow_query.');
-      found = { provider: entry.ytdlp === true ? 'ytdlp' : 'direct_url', ref: { host: c.host, path: c.u.pathname, query } };
+      const kind = entryKind(entry);
+      found = { provider: kind === 'page' ? 'page_link' : kind === 'ytdlp' ? 'ytdlp' : 'direct_url', ref: { host: c.host, path: c.u.pathname, query } };
     }
     CHECKS[found.provider](found.ref, { allowedHosts });
     const meta = PROVIDERS[found.provider];

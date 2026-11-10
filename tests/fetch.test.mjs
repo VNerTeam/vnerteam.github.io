@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   UA, chromeUA, chromeMajorOf, browserHeaders, curlHeaderArgs, shouldFallbackToBrowser, probeVerdict, RETRYABLE_ERRORS, isExecutableName,
-  pickMediaUrl, toNetscapeCookies, describeCookies, assessDownloadedHead, handoffReferer,
+  pickMediaUrl, toNetscapeCookies, describeCookies, assessDownloadedHead, handoffReferer, extractAnchors, pickLink, nameFromUrl, cookieHeaderFrom,
 } from '../scripts/fetch-core.mjs';
 import { Fail, headCheck, probeUrl } from '../scripts/resolvers.mjs';
 
@@ -174,4 +174,39 @@ test('handoffReferer & isExecutableName', () => {
   assert.equal(handoffReferer('about:blank', 'https://cdn.example/f.mp4', null), 'https://cdn.example/');
   for (const n of ['a.exe', 'setup.MSI', 'run.sh', 'app.apk', 'x.jar', 'inst.AppImage']) assert.equal(isExecutableName(n), true, n);
   for (const n of ['clip.mp4', 'film.mkv', 'notes.txt', '', null]) assert.equal(isExecutableName(n), false, String(n));
+});
+
+const PAGE = `<html><body>
+  <a class="btn dl" href="/files/shenhe8_1080p.mp4?t=a&amp;u=1">1080p</a>
+  <a class='dl btn primary' href='https://cdn.example/files/shenhe8_2160p.mp4'>4K</a>
+  <a class="dlx" href="/files/khac.mp4">sai class</a>
+  <a href="/files/khong-class.mp4">không class</a>
+  <a class="dl" href="#">neo</a><a class="dl" href="javascript:void(0)">js</a><a class="dl" href="mailto:a@b.c">mail</a>
+  <a class=dl href=/files/khongngoac_720p.mp4>720p</a>
+</body></html>`;
+test('extractAnchors: đủ class, đổi URL tuyệt đối, giải mã &amp;, bỏ #/javascript/mailto', () => {
+  const urls = extractAnchors(PAGE, ['dl'], 'https://site.example/video/1');
+  assert.deepEqual(urls, ['https://site.example/files/shenhe8_1080p.mp4?t=a&u=1', 'https://cdn.example/files/shenhe8_2160p.mp4', 'https://site.example/files/khongngoac_720p.mp4']);
+  assert.deepEqual(extractAnchors(PAGE, ['dl', 'primary'], 'https://site.example/'), ['https://cdn.example/files/shenhe8_2160p.mp4']);
+  assert.deepEqual(extractAnchors(PAGE, ['khongco'], 'https://site.example/'), []);
+  assert.deepEqual(extractAnchors(PAGE, [], 'https://site.example/'), []);
+  assert.deepEqual(extractAnchors(null, ['dl'], 'https://site.example/'), []);
+});
+test('pickLink: lọc theo chuỗi (không phân biệt hoa thường, cả bản giải mã), mặc định lấy link đầu, chỉ https', () => {
+  const l = ['https://cdn.example/a_1080p.mp4', 'https://cdn.example/a_2160p.mp4', 'https://cdn.example/a_2160p.mp4', 'http://cdn.example/a_4k.mp4', 'https://cdn.example/t%C3%AAn_2160P.mp4'];
+  assert.deepEqual(pickLink(l, '2160p.mp4'), { url: 'https://cdn.example/a_2160p.mp4', total: 3, matched: 2 });
+  assert.equal(pickLink(l, 'shenhe').url, null);
+  assert.equal(pickLink(l, 'shenhe').reason, 'nomatch');
+  assert.equal(pickLink(l, 'tên_2160p').url, 'https://cdn.example/t%C3%AAn_2160P.mp4');
+  assert.equal(pickLink(l, '').url, 'https://cdn.example/a_1080p.mp4');
+  assert.equal(pickLink(['http://x.example/a.mp4'], null).reason, 'none');
+  assert.equal(pickLink([], 'x').reason, 'none');
+});
+test('browserHeaders doc, nameFromUrl, cookieHeaderFrom', () => {
+  const h = browserHeaders('https://site.example/video/1', { doc: true });
+  assert.equal(h['Sec-Fetch-Dest'], 'document'); assert.equal(h['Sec-Fetch-Mode'], 'navigate'); assert.match(h.Accept, /^text\/html/);
+  assert.equal(nameFromUrl('https://cdn.example/f/shenhe8_2160p.mp4?tok=1'), 'shenhe8_2160p');
+  assert.equal(nameFromUrl('https://cdn.example/'), null);
+  assert.equal(cookieHeaderFrom(['sid=abc; Path=/; HttpOnly', 'x=1; Secure', 'rac\nroi=1', '=bad']), 'sid=abc; x=1');
+  assert.equal(cookieHeaderFrom(undefined), '');
 });

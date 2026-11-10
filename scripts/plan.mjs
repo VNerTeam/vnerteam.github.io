@@ -35,7 +35,7 @@ const picked = candidates.slice(0, slots);
 const matrix = {
   include: picked.map((i) => ({
     id: i.id,
-    item: { id: i.id, provider: i.provider, ref: i.ref, label: i.label, options: i.options, attempts: i.attempts, ladder_start: i.ladder_start },
+    item: { id: i.id, provider: i.provider, ref: i.ref, referer: i.referer, link_match: i.link_match, label: i.label, options: i.options, attempts: i.attempts, ladder_start: i.ladder_start },
   })),
 };
 const run = mode !== 'dry_run' && picked.length > 0;

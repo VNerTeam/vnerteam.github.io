@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { chromeUA, chromeMajorOf, pickMediaUrl, toNetscapeCookies, isExecutableName, describeCookies, handoffReferer } from './fetch-core.mjs';
+import { chromeUA, chromeMajorOf, pickMediaUrl, toNetscapeCookies, isExecutableName, describeCookies, handoffReferer, pickLink, nameFromUrl } from './fetch-core.mjs';
 import { validateRefPage } from '../docs/lib/schema.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -84,7 +84,7 @@ async function saveDownload(dl, dest, maxBytes, dlDir, deadlineMs) {
 }
 
 async function main() {
-  const { url, ref = null, dir, chrome, pwDir, headed = false, noSandbox = false, save = false, dest = null, maxBytes = 0, phaseMs = 180000, totalMs = 600000 } = job;
+  const { url, ref = null, linkClass = null, linkMatch = null, dir, chrome, pwDir, headed = false, noSandbox = false, save = false, dest = null, maxBytes = 0, phaseMs = 180000, totalMs = 600000 } = job;
   let u;
   try {
     u = new URL(url);
@@ -182,11 +182,56 @@ async function main() {
       await download.cancel().catch(() => {});
       return finish({ kind: 'file', url: finalUrl, name, cookies, referer: handoffReferer(page.url(), finalUrl, rp.value), ua });
     }
-    if (save) throw new BfError('browser_failed', 'Lần mở lại không thấy tải về (link có thể chỉ dùng được một lần).');
+    if (save && !linkClass) throw new BfError('browser_failed', 'Lần mở lại không thấy tải về (link có thể chỉ dùng được một lần).');
 
     if (resp && (resp.status() === 401 || resp.status() === 403)) throw new BfError('access_denied', `Trang trả HTTP ${resp.status()} cả với trình duyệt thật (có thể bị chặn theo IP hoặc cần đăng nhập).`, { blocked: true });
     if (resp && (resp.status() === 404 || resp.status() === 410)) throw new BfError('not_found', 'Link không còn tồn tại (404).');
     if (resp && resp.status() === 429) throw new BfError('rate_limited', 'Nguồn giới hạn tốc độ (HTTP 429).');
+
+    // 2b) trang có nút tải (page_link): tìm thẻ <a> theo class, lấy href NGAY lúc này để token còn mới
+    if (linkClass) {
+      await page.waitForLoadState('networkidle', { timeout: Math.min(12000, left()) }).catch(() => {});
+      let pick = { url: null, reason: 'none', total: 0 };
+      for (let round = 0; round < 4; round++) {
+        const hrefs = [];
+        for (const fr of page.frames()) {
+          try {
+            hrefs.push(...(await fr.evaluate((cls) => [...document.querySelectorAll('a[href]')].filter((a) => cls.every((c) => a.classList.contains(c))).map((a) => a.href), linkClass)));
+          } catch { /* khung chéo origin không đọc được */ }
+        }
+        pick = pickLink(hrefs, linkMatch);
+        if (pick.url || Date.now() > deadline - 5000) break;
+        await sleep(2500); // nút có thể được dựng bằng JavaScript sau khi trang tải
+      }
+      if (!pick.url) {
+        throw new BfError('link_not_found', pick.reason === 'nomatch'
+          ? `Có ${pick.total} link trong thẻ a class "${linkClass.join(' ')}" nhưng không link nào chứa "${linkMatch}".`
+          : `Không thấy thẻ a nào có class "${linkClass.join(' ')}".`);
+      }
+      mask(pick.url);
+      log(`Tìm thấy ${pick.matched}/${pick.total} link khớp class${pick.matched > 1 ? ' (lấy link đầu tiên)' : ''}.`);
+      if (!save) {
+        const cookies = await context.cookies(pick.url);
+        return finish({ kind: 'file', url: pick.url, name: nameFromUrl(pick.url) || '', cookies, referer: handoffReferer(page.url(), pick.url, null), ua });
+      }
+      // Dự phòng link dùng một lần: để chính trình duyệt bấm vào link (kèm Referer là trang hiện tại) và tải về đĩa.
+      download = null;
+      try {
+        await page.goto(pick.url, { waitUntil: 'domcontentloaded', timeout: Math.min(60000, left()), referer: page.url() });
+      } catch (e) {
+        if (!/download is starting|ERR_ABORTED/i.test(String(e.message))) throw new BfError('browser_failed', `Không mở được link tải: ${String(e.message || e).split('\n')[0].slice(0, 120)}`);
+      }
+      for (let i = 0; i < 40 && !download; i++) await sleep(250);
+      if (!download) throw new BfError('browser_failed', 'Mở link tải nhưng trình duyệt không tải về file nào.');
+      const dname = download.suggestedFilename() || '';
+      if (isExecutableName(dname)) {
+        await download.cancel().catch(() => {});
+        throw new BfError('not_a_video', 'Từ chối: link tải về file chương trình, không phải video.');
+      }
+      if (!dest) throw new BfError('browser_failed', 'Thiếu đường dẫn lưu.');
+      await saveDownload(download, dest, maxBytes, dlDir, deadline);
+      return { ok: true, kind: 'saved', name: dname.slice(0, 120) };
+    }
 
     // 3) trang HTML: chờ trang tải, gom luồng video
     await page.waitForLoadState('networkidle', { timeout: Math.min(12000, left()) }).catch(() => {});

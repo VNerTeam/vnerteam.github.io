@@ -89,6 +89,18 @@ export function validateRefPage(input) {
   return { ok: true, value: t };
 }
 
+// "Lọc link" (chỉ dùng cho provider page_link): chuỗi con mà href của thẻ <a> phải chứa (không phân biệt hoa thường), vd "2160p.mp4" hoặc "shenhe8_2160p".
+export const LINK_MATCH_MAX = 200;
+export function validateLinkMatch(input) {
+  if (input === undefined || input === null) return { ok: true, value: null };
+  if (typeof input !== 'string') return fail('Lọc link không hợp lệ.');
+  const t = input.trim();
+  if (!t) return { ok: true, value: null };
+  if (t.length > LINK_MATCH_MAX) return fail(`Lọc link tối đa ${LINK_MATCH_MAX} ký tự.`);
+  if (/[\u0000-\u001f\u007f]/.test(t)) return fail('Lọc link có ký tự điều khiển.');
+  return { ok: true, value: t };
+}
+
 const pad = (n, w = 2) => String(n).padStart(w, '0');
 export function newItemId(now = new Date()) {
   const b = new Uint8Array(3);
@@ -105,11 +117,11 @@ function stable(v) {
   if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}`;
   return JSON.stringify(v);
 }
-export function dedupeKey(provider, ref, options, referer = null) {
-  return `${provider}|${stable(ref)}|${stable(options)}${referer ? `|${referer}` : ''}`;
+export function dedupeKey(provider, ref, options, referer = null, linkMatch = null) {
+  return `${provider}|${stable(ref)}|${stable(options)}${referer ? `|${referer}` : ''}${linkMatch ? `|match:${linkMatch}` : ''}`;
 }
 
-const ITEM_KEYS = ['id', 'provider', 'ref', 'referer', 'label', 'options', 'status', 'attempts', 'ladder_start', 'last_error', 'added_at'];
+const ITEM_KEYS = ['id', 'provider', 'ref', 'referer', 'link_match', 'label', 'options', 'status', 'attempts', 'ladder_start', 'last_error', 'added_at'];
 
 // Kiểm tra 1 mục trong queue.json (dữ liệu không đáng tin). ctx.allowedHosts dùng cho direct_url.
 export function validateItem(item, ctx = {}) {
@@ -125,6 +137,8 @@ export function validateItem(item, ctx = {}) {
   if (!l.ok) return fail(l.message);
   const rp = validateRefPage(item.referer);
   if (!rp.ok) return fail(rp.message);
+  const lm = validateLinkMatch(item.link_match);
+  if (!lm.ok) return fail(lm.message);
   if (!STATUSES.includes(item.status)) return fail('status không hợp lệ.');
   const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
   if (!int(item.attempts, LIMITS.maxAttempts)) return fail('attempts không hợp lệ.');
@@ -134,7 +148,7 @@ export function validateItem(item, ctx = {}) {
   return {
     ok: true,
     value: {
-      id: item.id, provider: item.provider, ref: item.ref, referer: rp.value, label: l.value, options: o.value, status: item.status,
+      id: item.id, provider: item.provider, ref: item.ref, referer: rp.value, link_match: lm.value, label: l.value, options: o.value, status: item.status,
       attempts: item.attempts, ladder_start: item.ladder_start, last_error: item.last_error, added_at: item.added_at,
     },
   };

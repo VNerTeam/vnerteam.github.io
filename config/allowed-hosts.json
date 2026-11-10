@@ -1,8 +1,8 @@
 {
-  "_ghi_chu": "Allowlist cho provider direct_url. Mỗi mục: {\"host\": \"cdn.example.com\", \"allow_query\": false}. host khớp chính xác hoặc dạng \"*.r2.dev\" (chỉ tên miền con).",
+  "_ghi_chu": "Allowlist cho provider direct_url. Mỗi mục: {\"host\": \"cdn.example.com\", \"allow_query\": false}. host khớp chính xác hoặc dạng \"*.r2.dev\" (chỉ tên miền con). Thêm \"link_class\": \"tên-class\" để host đó là trang có nút tải: hệ thống mở trang, lấy href của thẻ <a> có class này rồi tải (xem README).",
   "hosts": [
-    { 
-      "host": "rule34video.com", 
+    {
+      "host": "rule34video.com",
       "allow_query": true,
       "ytdlp": false
     },

@@ -2,6 +2,7 @@
 // Thêm provider mới: thêm 1 entry vào RESOLVERS (và matcher/check trong docs/lib/providers.mjs).
 import fs from 'node:fs';
 import { UA, browserHeaders } from './fetch-core.mjs';
+import { parseLinkClass, matchAllowedHost } from '../docs/lib/providers.mjs';
 
 export class Fail extends Error {
   constructor(code, message, extra = {}) {
@@ -171,20 +172,27 @@ export const RESOLVERS = {
   },
   internet_archive: async (r) => http(`https://archive.org/download/${e(r.identifier)}/${encPath(r.file)}`, base(r.file)),
   direct_url: async (r) => http(`https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, directName(r)),
+  // Trang có nút tải: class của thẻ <a> lấy từ allowed-hosts.json (nguồn sự thật), không lưu trong mục hàng đợi.
+  page_link: async (r, ctx = {}) => {
+    const entry = matchAllowedHost(r.host, ctx.allowedHosts);
+    const linkClass = parseLinkClass(entry && entry.link_class);
+    if (!linkClass) throw new Fail('resolve_failed', 'Máy chủ này không còn link_class trong config/allowed-hosts.json.');
+    return { kind: 'page', url: `https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, linkClass, nameHint: null };
+  },
   ytdlp: async (r) => ({ kind: 'ytdlp', url: `https://${r.host}${r.path}${r.query ? `?${r.query}` : ''}`, nameHint: null }),
   onedrive: resolveOnedrive,
 };
 
-export async function resolve(provider, ref) {
+export async function resolve(provider, ref, ctx = {}) {
   const fn = RESOLVERS[provider];
   if (!fn) throw new Fail('unsupported', `Provider ${provider} chưa có resolver.`);
-  const out = await fn(ref);
+  const out = await fn(ref, ctx);
   if (out.kind !== 'gdown' && !out.url.startsWith('https://')) throw new Fail('resolve_failed', 'Link tải không phải https.');
   return out;
 }
 
 // Các giá trị bí mật cần che trong log công khai
-const SECRET_KEYS = { gdrive: ['id', 'resourcekey'], dropbox: ['rlkey'], pcloud: ['code'], onedrive: ['path', 'resid', 'authkey'], direct_url: ['query'], ytdlp: ['path', 'query'] };
+const SECRET_KEYS = { gdrive: ['id', 'resourcekey'], dropbox: ['rlkey'], pcloud: ['code'], onedrive: ['path', 'resid', 'authkey'], direct_url: ['query'], page_link: ['path', 'query'], ytdlp: ['path', 'query'] };
 export function secretsOf(provider, ref) {
   return (SECRET_KEYS[provider] || []).map((k) => ref[k]).filter((v) => typeof v === 'string' && v.length >= 4);
 }

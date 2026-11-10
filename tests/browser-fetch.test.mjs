@@ -10,13 +10,14 @@ import { spawnSync } from 'node:child_process';
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const FAKE_PW = `
 const sc = JSON.parse(process.env.FAKE || '{}');
-class Dl { url() { return sc.download.url; } suggestedFilename() { return sc.download.name; } async cancel() {} async path() { return sc.download.file; } }
+class Dl { constructor(d) { this.d = d || sc.download; } url() { return this.d.url; } suggestedFilename() { return this.d.name; } async cancel() {} async path() { return this.d.file; } }
 class Page {
   constructor() { this.h = {}; this.cur = 'about:blank'; this.n = 0; }
   on(ev, fn) { this.h[ev] = fn; }
   url() { return this.cur; }
-  async goto(url) {
+  async goto(url, o) {
     this.n++;
+    if (sc.anchorDl && sc.anchors && sc.anchors.some((a) => a.href === url)) { this.cur = url; this.h.download(new Dl(sc.anchorDl)); throw new Error('page.goto: Download is starting'); }
     if (sc.refGoto === false && this.n === 1 && sc.hasRef) throw new Error('net::ERR_FAILED');
     if (url !== sc.target) { this.cur = url; return { status: () => 200 }; }
     if (sc.download) { this.h.download(new Dl()); throw new Error('page.goto: Download is starting'); }
@@ -25,7 +26,7 @@ class Page {
     return { status: () => sc.status || 200 };
   }
   async waitForLoadState() {}
-  frames() { return [{ evaluate: async () => sc.domVideos || [] }]; }
+  frames() { return [{ evaluate: async (fn, arg) => (arg ? (sc.anchors || []).filter((a) => arg.every((c) => a.classes.includes(c))).map((a) => a.href) : sc.domVideos || []) }]; }
 }
 exports.chromium = { async launch(o) {
   if (sc.launchFail) throw new Error('boom');
@@ -111,5 +112,44 @@ test('chế độ save: chuyển file trình duyệt đã tải về đường d
   assert.equal(res.ok, true); assert.equal(res.kind, 'saved');
   assert.equal(fs.readFileSync(dest, 'utf8'), 'VIDEO');
   assert.ok(!fs.existsSync(src));
+  fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('page_link: lấy href của thẻ a theo class + lọc link; cookie bàn giao, Referer là trang', () => {
+  const sc = { target: 'https://site.example/video/9', cookies: [{ name: 'sid', value: 'GIATRI-BIMAT-9', domain: 'site.example', path: '/' }], anchors: [
+    { classes: ['dl', 'btn'], href: 'https://cdn.example/f/shenhe8_1080p.mp4?tok=1' },
+    { classes: ['dl', 'btn'], href: 'https://cdn.example/f/shenhe8_2160p.mp4?tok=2' },
+    { classes: ['other'], href: 'https://cdn.example/f/quangcao_2160p.mp4' } ] };
+  let r = runBf(sc, { linkClass: ['dl'], linkMatch: '2160P.MP4' });
+  assert.equal(r.res.ok, true); assert.equal(r.res.kind, 'file');
+  assert.equal(r.res.url, 'https://cdn.example/f/shenhe8_2160p.mp4?tok=2');
+  assert.equal(r.res.name, 'shenhe8_2160p');
+  assert.equal(r.res.referer, 'https://site.example/'); // trang khác origin với link tải → chỉ origin
+  assert.ok(!r.stdout.includes('GIATRI-BIMAT-9'));
+  assert.ok(r.stdout.includes('::add-mask::https://cdn.example/f/shenhe8_2160p.mp4?tok=2'));
+  fs.rmSync(r.dir, { recursive: true, force: true });
+  r = runBf(sc, { linkClass: ['dl', 'btn'] }); // không lọc → link đầu tiên
+  assert.equal(r.res.url, 'https://cdn.example/f/shenhe8_1080p.mp4?tok=1');
+  fs.rmSync(r.dir, { recursive: true, force: true });
+});
+
+test('page_link: không có thẻ a / không link nào khớp → link_not_found', () => {
+  const sc = { target: 'https://site.example/video/10', anchors: [{ classes: ['dl'], href: 'https://cdn.example/f/a_720p.mp4' }] };
+  let r = runBf(sc, { linkClass: ['khongco'], phaseMs: 6000 });
+  assert.equal(r.res.ok, false); assert.equal(r.res.code, 'link_not_found'); assert.match(r.res.message, /khongco/);
+  fs.rmSync(r.dir, { recursive: true, force: true });
+  r = runBf(sc, { linkClass: ['dl'], linkMatch: '2160p', phaseMs: 6000 });
+  assert.equal(r.res.code, 'link_not_found'); assert.match(r.res.message, /Có 1 link/);
+  fs.rmSync(r.dir, { recursive: true, force: true });
+});
+
+test('page_link ở chế độ save: bấm link lấy từ trang rồi lưu file trình duyệt tải về', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-pl-'));
+  const src = path.join(tmp, 'guid-1'); fs.writeFileSync(src, 'VIDEO2');
+  const dest = path.join(tmp, 'input.bin');
+  const href = 'https://cdn.example/f/clip_2160p.mp4?tok=7';
+  const { res, dir } = runBf({ target: 'https://site.example/video/11', anchors: [{ classes: ['dl'], href }], anchorDl: { url: href, name: 'clip_2160p.mp4', file: src } }, { linkClass: ['dl'], save: true, dest });
+  assert.equal(res.ok, true); assert.equal(res.kind, 'saved');
+  assert.equal(fs.readFileSync(dest, 'utf8'), 'VIDEO2');
   fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(tmp, { recursive: true, force: true });
 });

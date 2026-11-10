@@ -1,7 +1,7 @@
 // Cloudflare Worker: cổng ghi duy nhất vào hệ thống. PAT GitHub chỉ nằm trong secret của Worker.
 // Luật lọc link/tuỳ chọn dùng chung với trình duyệt và workflow (docs/lib/*.mjs).
 import { parseLink } from '../../docs/lib/providers.mjs';
-import { validateOptions, validateLabel, validateRefPage, newItemId, dedupeKey, parseQueue, serializeQueue, LIMITS, ID_RE } from '../../docs/lib/schema.mjs';
+import { validateOptions, validateLabel, validateRefPage, validateLinkMatch, newItemId, dedupeKey, parseQueue, serializeQueue, LIMITS, ID_RE } from '../../docs/lib/schema.mjs';
 import { CATALOG_TAG, CATALOG_JSON, parseCatalog, fromReleases, daysView } from '../../docs/lib/catalog.mjs';
 
 const enc = new TextEncoder();
@@ -211,7 +211,7 @@ async function getAllowedHosts(env) {
   if (f) {
     try {
       const j = JSON.parse(f.text);
-      if (Array.isArray(j.hosts)) list = j.hosts.filter((h) => h && typeof h.host === 'string').map((h) => ({ host: h.host, allow_query: h.allow_query === true, ytdlp: h.ytdlp === true }));
+      if (Array.isArray(j.hosts)) list = j.hosts.filter((h) => h && typeof h.host === 'string').map((h) => ({ host: h.host, allow_query: h.allow_query === true, ytdlp: h.ytdlp === true, link_class: typeof h.link_class === 'string' ? h.link_class : null }));
     } catch { /* file hỏng → coi như rỗng */ }
   }
   cache.hosts = { at: Date.now(), list };
@@ -283,22 +283,24 @@ async function addItems(env, request) {
     if (!l.ok) return reject('bad_label', l.message);
     const rp = validateRefPage(it.referer);
     if (!rp.ok) return reject('bad_referer', rp.message);
-    cands.push({ index, id: newItemId(now), provider: p.provider, ref: p.ref, options: o.value, label: l.value, referer: rp.value });
+    const lm = validateLinkMatch(it.link_match);
+    if (!lm.ok) return reject('bad_link_match', lm.message);
+    cands.push({ index, id: newItemId(now), provider: p.provider, ref: p.ref, options: o.value, label: l.value, referer: rp.value, link_match: p.provider === 'page_link' ? lm.value : null });
   });
   if (!cands.length) return { results, added: 0, ...countOf({ items: [] }) };
 
   const out = await mutateQueue(env, `Thêm ${cands.length} mục vào hàng đợi`, (queue) => {
     // chuẩn hoá tuỳ chọn của mục cũ (thiếu khoá mới như phone) để so khớp đúng với mục mới
     const norm = (o) => { const v = validateOptions(o); return v.ok ? v.value : o; };
-    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, norm(i.options), i.referer || null)));
+    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, norm(i.options), i.referer || null, i.link_match || null)));
     const res = [];
     let added = 0;
     for (const c of cands) {
-      const key = dedupeKey(c.provider, c.ref, c.options, c.referer);
+      const key = dedupeKey(c.provider, c.ref, c.options, c.referer, c.link_match);
       if (keys.has(key)) res.push({ index: c.index, ok: false, reason: 'duplicate', message: 'Đã có mục giống hệt đang chờ trong hàng đợi.' });
       else if (queue.items.length >= LIMITS.maxQueue) res.push({ index: c.index, ok: false, reason: 'queue_full', message: `Hàng đợi đã đầy (${LIMITS.maxQueue} mục).` });
       else {
-        queue.items.push({ id: c.id, provider: c.provider, ref: c.ref, referer: c.referer, label: c.label, options: c.options, status: 'pending', attempts: 0, ladder_start: 0, last_error: null, added_at: now.toISOString() });
+        queue.items.push({ id: c.id, provider: c.provider, ref: c.ref, referer: c.referer, link_match: c.link_match, label: c.label, options: c.options, status: 'pending', attempts: 0, ladder_start: 0, last_error: null, added_at: now.toISOString() });
         keys.add(key);
         res.push({ index: c.index, ok: true, id: c.id, provider: c.provider });
         added++;
@@ -312,7 +314,7 @@ async function addItems(env, request) {
 
 async function patchItem(env, request, id) {
   const body = await readBody(request);
-  if (!('options' in body) && !('label' in body) && !('referer' in body)) throw new HttpError(400, 'bad_request', 'Cần gửi options, label hoặc referer.');
+  if (!('options' in body) && !('label' in body) && !('referer' in body) && !('link_match' in body)) throw new HttpError(400, 'bad_request', 'Cần gửi options, label, referer hoặc link_match.');
   return mutateQueue(env, `Sửa mục ${id}`, (queue) => {
     const it = queue.items.find((i) => i && i.id === id);
     if (!it) throw new HttpError(404, 'not_found', 'Không tìm thấy mục.');
@@ -333,6 +335,12 @@ async function patchItem(env, request, id) {
       if (!rp.ok) throw new HttpError(400, 'bad_referer', rp.message);
       it.referer = rp.value;
     }
+    if ('link_match' in body) {
+      if (it.provider !== 'page_link') throw new HttpError(400, 'bad_link_match', 'Lọc link chỉ dùng cho link kiểu "trang có nút tải".');
+      const lm = validateLinkMatch(body.link_match);
+      if (!lm.ok) throw new HttpError(400, 'bad_link_match', lm.message);
+      it.link_match = lm.value;
+    }
     return { changed: true, out: { ok: true, item: it } };
   });
 }
@@ -350,13 +358,14 @@ async function patchBatch(env, request) {
       const no = (reason, message) => results.push({ index, id: typeof id === 'string' ? id.slice(0, 40) : null, ok: false, reason, message });
       if (!ch || typeof ch !== 'object' || Array.isArray(ch)) { no('bad_item', 'Mục không hợp lệ.'); continue; }
       if (typeof id !== 'string' || !ID_RE.test(id)) { no('bad_id', 'id không hợp lệ.'); continue; }
-      if (!('options' in ch) && !('label' in ch) && !('referer' in ch)) { no('bad_request', 'Cần gửi options, label hoặc referer.'); continue; }
+      if (!('options' in ch) && !('label' in ch) && !('referer' in ch) && !('link_match' in ch)) { no('bad_request', 'Cần gửi options, label, referer hoặc link_match.'); continue; }
       const it = queue.items.find((i) => i && i.id === id);
       if (!it) { no('not_found', 'Không tìm thấy mục (có thể đã xong hoặc đã bị xóa).'); continue; }
       if (!['pending', 'failed'].includes(it.status)) { no('item_busy', 'Mục không ở trạng thái sửa được.'); continue; }
       let options = it.options;
       let label = it.label;
       let referer = it.referer ?? null;
+      let linkMatch = it.link_match ?? null;
       if ('options' in ch) {
         if (!ch.options || typeof ch.options !== 'object' || Array.isArray(ch.options)) { no('bad_options', 'Tuỳ chọn không hợp lệ.'); continue; }
         const o = validateOptions({ ...it.options, ...ch.options });
@@ -373,9 +382,16 @@ async function patchBatch(env, request) {
         if (!rp.ok) { no('bad_referer', rp.message); continue; }
         referer = rp.value;
       }
+      if ('link_match' in ch) {
+        if (it.provider !== 'page_link') { no('bad_link_match', 'Lọc link chỉ dùng cho link kiểu "trang có nút tải".'); continue; }
+        const lm = validateLinkMatch(ch.link_match);
+        if (!lm.ok) { no('bad_link_match', lm.message); continue; }
+        linkMatch = lm.value;
+      }
       it.options = options;
       it.label = label;
       it.referer = referer;
+      if (it.provider === 'page_link') it.link_match = linkMatch;
       results.push({ index, id, ok: true });
       updated++;
     }

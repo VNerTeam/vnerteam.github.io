@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { parseLink, validateRef, PROVIDER_IDS, matchAllowedHost } from '../docs/lib/providers.mjs';
 
 const allowedHosts = [{ host: 'cdn.example.com', allow_query: false }, { host: '*.r2.dev', allow_query: false }, { host: 'files.mysite.io', allow_query: true },
-  { host: 'video.example.org', allow_query: false, ytdlp: true }, { host: '*.media.example', allow_query: true, ytdlp: true }, { host: 'watch.example.net', allow_query: true, ytdlp: true }];
+  { host: 'video.example.org', allow_query: false, ytdlp: true }, { host: '*.media.example', allow_query: true, ytdlp: true }, { host: 'watch.example.net', allow_query: true, ytdlp: true },
+  { host: 'phim.example', allow_query: false, link_class: 'download-btn' }, { host: 'trang.example', allow_query: true, link_class: 'dl btn' }];
 const ID = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345';
 
 // [provider, [link hợp lệ...], [link bị từ chối...]]
@@ -43,6 +44,10 @@ const CASES = {
   ytdlp: [
     ['https://video.example.org/watch/abc123', 'https://a.media.example/v?id=1', 'https://watch.example.net/p/slug?x=1&y=2'],
     ['https://video.example.org/watch?id=1', 'https://unknown-site.example.com/watch/abc', 'https://watch.example.net/a/../b'],
+  ],
+  page_link: [
+    ['https://phim.example/video/123', 'https://trang.example/xem/ten-phim?id=5', 'https://phim.example/a/b/c.html'],
+    ['https://phim.example/video?id=1', 'https://trang.example/a/../b', 'https://chua-khai-bao.example/video/1'],
   ],
   onedrive: [
     ['https://1drv.ms/u/s!AbCdEfGhIjK', 'https://1drv.ms/u/c/0123456789abcdef/EaBcDeFgHiJ', 'https://onedrive.live.com/?resid=ABCDEF123456789%21123&authkey=%21AbCd123'],

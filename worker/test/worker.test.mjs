@@ -403,3 +403,33 @@ test('patch item và batch: sửa/xoá referer, kiểm tra hợp lệ, batch v�
   const none = await call(env, '/api/queue/batch', { method: 'PATCH', body: { changes: [{ id: a.id }] } });
   assert.equal((await none.json()).results[0].reason, 'bad_request');
 });
+
+// ---------- link_match + host có link_class ----------
+test('page_link: Worker nhận link_match, bỏ qua với provider khác, kiểm tra độ dài, sửa qua patch/batch', async () => {
+  const env = makeEnv(); const st = fakeGithub();
+  st.files['config/allowed-hosts.json'] = JSON.stringify({ hosts: [{ host: 'phim.example', allow_query: false, ytdlp: false, link_class: 'download-btn' }] });
+  const cfg = await (await call(env, '/api/config')).json();
+  assert.equal(cfg.allowed_hosts[0].link_class, 'download-btn');
+  const r = await call(env, '/api/queue/add', { method: 'POST', body: { items: [
+    { url: 'https://phim.example/video/1', link_match: '2160p.mp4' },
+    { url: 'https://phim.example/video/2', link_match: 'x'.repeat(201) },
+    { url: GDRIVE, link_match: 'bo-qua' },
+  ] } });
+  const d = await r.json();
+  assert.deepEqual(d.results.map((x) => x.ok), [true, false, true]);
+  assert.equal(d.results[1].reason, 'bad_link_match');
+  const items = q(st).items;
+  assert.equal(items[0].provider, 'page_link'); assert.equal(items[0].link_match, '2160p.mp4');
+  assert.equal(items[1].provider, 'gdrive'); assert.equal(items[1].link_match, null);
+  const p1 = await call(env, `/api/queue/item/${items[0].id}`, { method: 'PATCH', body: { link_match: 'shenhe8_1080p' } });
+  assert.equal(p1.status, 200); assert.equal(q(st).items[0].link_match, 'shenhe8_1080p');
+  const bad = await call(env, `/api/queue/item/${items[1].id}`, { method: 'PATCH', body: { link_match: 'x' } });
+  assert.equal(bad.status, 400);
+  const b = await call(env, '/api/queue/batch', { method: 'PATCH', body: { changes: [{ id: items[0].id, link_match: '' }, { id: items[1].id, link_match: 'x' }] } });
+  const bd = await b.json();
+  assert.deepEqual(bd.results.map((x) => x.ok), [true, false]);
+  assert.equal(q(st).items[0].link_match, null);
+  // cùng trang nhưng khác "Lọc link" không bị coi là trùng
+  const a1 = await (await call(env, '/api/queue/add', { method: 'POST', body: { items: [{ url: 'https://phim.example/video/1', link_match: '1080p' }, { url: 'https://phim.example/video/1', link_match: '2160p' }] } })).json();
+  assert.equal(a1.added, 2);
+});

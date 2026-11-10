@@ -23,7 +23,7 @@ const originOf = (u) => new URL(u).origin;
 //   first — URL của request đầu tiên (để biết đang ở bước chuyển hướng sang host khác hay chưa).
 //   prev  — URL của bước ngay trước (khi đang đi theo chuyển hướng).
 // Sau khi chuyển hướng sang host khác, Referer chỉ còn là origin của bước trước, KHÔNG bao giờ lộ `ref` sang host lạ.
-export function browserHeaders(url, { ref = null, first = null, prev = null } = {}) {
+export function browserHeaders(url, { ref = null, first = null, prev = null, doc = false } = {}) {
   const origin = originOf(url);
   const sameAsFirst = !first || originOf(first) === origin;
   let referer;
@@ -34,6 +34,18 @@ export function browserHeaders(url, { ref = null, first = null, prev = null } = 
   try {
     if (originOf(referer) === origin) site = 'same-origin';
   } catch { /* giữ cross-site */ }
+  if (doc) { // mở một trang web (không phải tải file media)
+    return {
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
+      Referer: referer,
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': site,
+      Connection: 'keep-alive',
+    };
+  }
   return {
     Accept: 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
     'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
@@ -155,4 +167,75 @@ export function assessDownloadedHead(headInfo, fail) {
   if (headInfo.video) return headInfo;
   const blocked = headInfo.kind === 'html' || headInfo.kind === 'json';
   throw fail('not_direct_video', `Nội dung tải về không phải video (${headInfo.kind}).`, blocked ? { blocked: true } : {});
+}
+
+// ---- trang có nút tải (provider page_link) ----
+const ENT = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+const decodeEntities = (t) => t.replace(/&(?:#(\d{1,6})|#x([0-9a-f]{1,6})|(amp|quot|apos|lt|gt));/gi, (_, d, x, n) => (n ? ENT[n.toLowerCase()] : String.fromCodePoint(d ? Number(d) : parseInt(x, 16))));
+
+// Lấy href (đã đổi thành URL tuyệt đối) của mọi thẻ <a> có ĐỦ các class trong `classes`. Không dùng thư viện HTML nên chỉ đọc thẻ mở <a ...>.
+export function extractAnchors(html, classes, baseUrl) {
+  const need = (classes || []).filter(Boolean);
+  const out = [];
+  if (!need.length || typeof html !== 'string') return out;
+  for (const m of html.matchAll(/<a\b([^>]*)>/gi)) {
+    const attrs = {};
+    for (const a of m[1].matchAll(/([a-zA-Z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) attrs[a[1].toLowerCase()] = a[2] ?? a[3] ?? a[4] ?? '';
+    if (attrs.href === undefined || attrs.class === undefined) continue;
+    const have = new Set(decodeEntities(attrs.class).split(/\s+/).filter(Boolean));
+    if (!need.every((c) => have.has(c))) continue;
+    const href = decodeEntities(attrs.href).trim();
+    if (!href || href.startsWith('#') || /^(javascript|mailto|tel|data|blob):/i.test(href)) continue;
+    try {
+      out.push(new URL(href, baseUrl).href);
+    } catch { /* href hỏng: bỏ qua */ }
+  }
+  return out;
+}
+
+// Chọn link từ danh sách href. match: chuỗi con (không phân biệt hoa thường, so cả bản đã giải mã %xx). Chỉ nhận https.
+// Trả về { url, total, matched } hoặc { url: null, reason: 'none' | 'nomatch', total }.
+export function pickLink(hrefs, match) {
+  const list = [...new Set((hrefs || []).filter((h) => typeof h === 'string'))].filter((h) => {
+    try {
+      return new URL(h).protocol === 'https:';
+    } catch {
+      return false;
+    }
+  });
+  if (!list.length) return { url: null, reason: 'none', total: 0 };
+  const m = String(match || '').trim().toLowerCase();
+  if (!m) return { url: list[0], total: list.length, matched: list.length };
+  const ok = list.filter((h) => {
+    let d = h;
+    try {
+      d = decodeURIComponent(h);
+    } catch { /* giữ nguyên */ }
+    return h.toLowerCase().includes(m) || d.toLowerCase().includes(m);
+  });
+  if (!ok.length) return { url: null, reason: 'nomatch', total: list.length };
+  return { url: ok[0], total: list.length, matched: ok.length };
+}
+
+// Gợi ý tên video từ đường dẫn của link tải (bỏ đuôi file).
+export function nameFromUrl(u) {
+  try {
+    let p = new URL(u).pathname.split('/').filter(Boolean).pop() || '';
+    try {
+      p = decodeURIComponent(p);
+    } catch { /* giữ nguyên */ }
+    return p.replace(/\.[A-Za-z0-9]{2,4}$/, '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Set-Cookie của trang → chuỗi "a=b; c=d" cho curl -b (chỉ lấy cặp tên=giá trị, bỏ thuộc tính). Không bao giờ đem chuỗi này ra log.
+export function cookieHeaderFrom(setCookies) {
+  const pairs = [];
+  for (const c of setCookies || []) {
+    const kv = String(c).split(';')[0].trim();
+    if (/^[^=\s;,]+=[^\r\n]*$/.test(kv)) pairs.push(kv);
+  }
+  return pairs.join('; ');
 }

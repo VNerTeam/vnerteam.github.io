@@ -1,7 +1,7 @@
 // Giao diện quản lý hàng đợi. Mọi chuỗi động hiển thị bằng textContent (không innerHTML).
 import { WORKER_URL } from './config.js';
 import { parseLink, suggestName, PROVIDERS } from './lib/providers.mjs';
-import { OPTION_CHOICES, OPTION_LABELS, VMAF_RANGE, defaultOptions, validateOptions, validateLabel, validateRefPage } from './lib/schema.mjs';
+import { OPTION_CHOICES, OPTION_LABELS, VMAF_RANGE, defaultOptions, validateOptions, validateLabel, validateRefPage, validateLinkMatch } from './lib/schema.mjs';
 import { fmtDur } from './lib/format.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -58,6 +58,7 @@ const ERROR_TEXT = {
   download_failed: 'Tải file nguồn thất bại.',
   ytdlp_unsupported: 'yt-dlp không hỗ trợ trang này (đã thử cả bản mới nhất).',
   drm_protected: 'Video có bảo vệ DRM, không tải được.',
+  link_not_found: 'Không tìm thấy thẻ a có class đã cấu hình (hoặc không link nào chứa "Lọc link"). Kiểm tra link_class trong allowed-hosts.json và ô "Lọc link".',
   browser_failed: 'Trình duyệt thật gặp lỗi khi mở trang hoặc tải (mục này được tự thử lại theo max_attempts). Xem log của lần chạy.',
   browser_no_video: 'Mở được trang nhưng không thấy luồng video tải được (hoặc chỉ có blob:). Thử dán link tới file video, hoặc điền "Trang mở trước".',
   browser_unavailable: 'Runner không dùng được Chrome/Playwright/xvfb. Xem log của bước cài trình duyệt.',
@@ -203,7 +204,7 @@ function optionsEditor(opts, onChange) {
 }
 const chipText = (o, k) => { const t = OPTION_CHOICES[k].find(([v]) => v === o[k])?.[1] ?? String(o[k]); return k === 'phone' ? `Điện thoại: ${t}` : k === 'fetch_mode' ? `Cách tải: ${t}` : t; };
 const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ''; } };
-const chips = (o, referer) => h('div', { class: 'chips' }, Object.keys(OPTION_CHOICES).map((k) => h('span', {}, chipText(o, k))), o.min_vmaf != null ? h('span', {}, `VMAF ≥ ${o.min_vmaf}`) : null, referer ? h('span', {}, `Trang mở trước: ${hostOf(referer)}`) : null);
+const chips = (o, referer, linkMatch) => h('div', { class: 'chips' }, Object.keys(OPTION_CHOICES).map((k) => h('span', {}, chipText(o, k))), o.min_vmaf != null ? h('span', {}, `VMAF ≥ ${o.min_vmaf}`) : null, referer ? h('span', {}, `Trang mở trước: ${hostOf(referer)}`) : null, linkMatch ? h('span', {}, `Lọc link: ${linkMatch}`) : null);
 // Ô nhập "Trang mở trước" (không bắt buộc). Chỉ hiện thông báo lỗi tại chỗ; việc kiểm tra thật nằm ở schema/Worker.
 function refererInput(value, onChange) {
   const note = h('span', { class: 'muted' }, '');
@@ -212,6 +213,14 @@ function refererInput(value, onChange) {
   return h('label', { class: 'muted' }, 'Trang mở trước (tuỳ chọn): trang web chứa link này, dùng làm Referer hoặc để trình duyệt mở trước lấy phiên', inp, note);
 }
 const providerBadges = (p) => [h('span', { class: 'badge' }, PROVIDERS[p]?.label || p), PROVIDERS[p]?.experimental ? h('span', { class: 'badge exp' }, ' Thử nghiệm') : null];
+
+// Ô "Lọc link" cho link kiểu "trang có nút tải": nhiều thẻ a cùng class (vd mỗi độ phân giải một link) thì gõ phần có trong link cần lấy.
+function linkMatchInput(value, onChange) {
+  const note = h('span', { class: 'muted' }, '');
+  const inp = h('input', { maxlength: 200, placeholder: 'vd: 2160p.mp4 hoặc shenhe8_2160p', value: value || '', spellcheck: 'false', style: 'width:100%',
+    oninput: (e) => { const v = validateLinkMatch(e.target.value); note.textContent = v.ok ? '' : v.message; note.className = v.ok ? 'muted' : 'msg bad'; onChange(e.target.value); } });
+  return h('label', { class: 'muted' }, 'Lọc link (tuỳ chọn): chỉ lấy thẻ a có href chứa chuỗi này (không phân biệt hoa thường)', inp, note);
+}
 
 // ---------- xem trước khi dán ----------
 function parseLines() {
@@ -230,7 +239,7 @@ function addDrafts() {
   let n = 0;
   for (const { url, r } of parseLines()) {
     if (!r.ok) continue;
-    state.drafts.push({ key: state.nextId++, url, parsed: r, options: { ...state.defaults }, label: suggestName(r.provider, r.ref) || '', referer: '', error: null });
+    state.drafts.push({ key: state.nextId++, url, parsed: r, options: { ...state.defaults }, label: suggestName(r.provider, r.ref) || '', referer: '', link_match: '', error: null });
     n++;
   }
   if (n) { $('links').value = ''; renderPreview(); }
@@ -248,10 +257,11 @@ function renderDrafts() {
     const rerender = () => renderDrafts();
     box.append(h('div', { class: `item${d.error ? ' err' : ''}` },
       h('div', { class: 'row' }, providerBadges(d.parsed.provider), h('span', { class: 'ref grow' }, d.parsed.summary), h('button', { class: 'danger', onclick: () => { state.drafts = state.drafts.filter((x) => x !== d); rerender(); } }, 'Xóa')),
-      chips(d.options, d.referer),
+      chips(d.options, d.referer, d.link_match),
       h('details', {}, h('summary', {}, 'Sửa tuỳ chọn'),
         h('label', { class: 'muted' }, 'Tên hiển thị (tuỳ chọn) ', h('input', { maxlength: 80, value: d.label, oninput: (e) => { d.label = e.target.value; } })),
         refererInput(d.referer, (v) => { d.referer = v; }),
+        d.parsed.provider === 'page_link' ? linkMatchInput(d.link_match, (v) => { d.link_match = v; }) : null,
         optionsEditor(d.options, rerender)),
       isDup(d) ? h('p', { class: 'msg warn' }, 'Trùng với một nháp khác.') : null,
       d.parsed.warning ? h('p', { class: 'msg warn' }, d.parsed.warning) : null,
@@ -267,9 +277,9 @@ async function saveDrafts() {
   try {
     const items = []; const sent = [];
     for (const d of state.drafts) {
-      const o = validateOptions(d.options); const l = validateLabel(d.label); const rp = validateRefPage(d.referer);
-      if (!o.ok || !l.ok || !rp.ok) { d.error = (!o.ok ? o : !l.ok ? l : rp).message; continue; }
-      d.error = null; items.push({ url: d.url, options: o.value, label: l.value, referer: rp.value }); sent.push(d);
+      const o = validateOptions(d.options); const l = validateLabel(d.label); const rp = validateRefPage(d.referer); const lm = validateLinkMatch(d.link_match);
+      if (!o.ok || !l.ok || !rp.ok || !lm.ok) { d.error = (!o.ok ? o : !l.ok ? l : !rp.ok ? rp : lm).message; continue; }
+      d.error = null; items.push({ url: d.url, options: o.value, label: l.value, referer: rp.value, link_match: lm.value }); sent.push(d);
     }
     if (!items.length) { renderDrafts(); return; }
     if (items.length > 50) throw new Error('Mỗi lần chỉ lưu tối đa 50 mục. Hãy xóa bớt nháp.');
@@ -317,16 +327,18 @@ function renderQueue() {
     const failed = it.status === 'failed';
     const base = normOpts(it.options);
     const baseRef = it.referer || '';
+    const baseMatch = it.link_match || '';
     const work = state.edits.has(it.id) ? state.edits.get(it.id).options : { ...base };
-    const cur = { referer: state.edits.has(it.id) ? state.edits.get(it.id).referer : baseRef };
-    let chipEl = chips(work, cur.referer);
+    const ed = state.edits.get(it.id);
+    const cur = { referer: ed ? ed.referer : baseRef, linkMatch: ed ? ed.linkMatch : baseMatch };
+    let chipEl = chips(work, cur.referer, cur.linkMatch);
     const dirtyNote = h('span', { class: 'badge exp', hidden: !state.edits.has(it.id) }, 'Chưa lưu');
     const card = h('div', { class: `item${failed ? ' failed' : ''}${state.edits.has(it.id) ? ' dirty' : ''}` });
     const onEdit = () => {
-      if (sameOpts(work, base) && cur.referer === baseRef) state.edits.delete(it.id); else state.edits.set(it.id, { options: work, referer: cur.referer });
+      if (sameOpts(work, base) && cur.referer === baseRef && cur.linkMatch === baseMatch) state.edits.delete(it.id); else state.edits.set(it.id, { options: work, referer: cur.referer, linkMatch: cur.linkMatch });
       const dirty = state.edits.has(it.id);
       card.classList.toggle('dirty', dirty); dirtyNote.hidden = !dirty;
-      const fresh = chips(work, cur.referer); chipEl.replaceWith(fresh); chipEl = fresh;
+      const fresh = chips(work, cur.referer, cur.linkMatch); chipEl.replaceWith(fresh); chipEl = fresh;
       updateEditBar();
     };
     card.append(
@@ -334,7 +346,7 @@ function renderQueue() {
       chipEl,
       failed ? h('p', { class: 'msg bad' }, `${errText(it.last_error)} (đã thử ${it.attempts} lần)`) : (it.last_error ? h('p', { class: 'msg warn' }, errText(it.last_error)) : null),
       h('p', { class: 'muted' }, `Thêm lúc ${fmtDate(it.added_at)} • mã ${it.id}`),
-      h('details', {}, h('summary', {}, 'Sửa tuỳ chọn'), refererInput(cur.referer, (v) => { cur.referer = v; onEdit(); }), optionsEditor(work, onEdit),
+      h('details', {}, h('summary', {}, 'Sửa tuỳ chọn'), refererInput(cur.referer, (v) => { cur.referer = v; onEdit(); }), it.provider === 'page_link' ? linkMatchInput(cur.linkMatch, (v) => { cur.linkMatch = v; onEdit(); }) : null, optionsEditor(work, onEdit),
         h('p', { class: 'muted' }, 'Thay đổi chỉ lưu sau khi bấm "Lưu tất cả thay đổi".')),
       h('div', { class: 'row', style: 'margin-top:8px' },
         failed ? h('button', { class: 'primary', onclick: () => act(() => api(`/api/queue/retry/${it.id}`, { method: 'POST' }), 'Đã chuyển về hàng chờ.') }, 'Thử lại') : null,
@@ -357,7 +369,12 @@ async function saveAll() {
       if (!rp.ok) return msg($('qmsg'), `Mục ${it.label || it.id}: ${rp.message}`, 'bad');
       ch.referer = rp.value;
     }
-    if (ch.options || 'referer' in ch) changes.push(ch); else state.edits.delete(id);
+    if (it.provider === 'page_link' && (e.linkMatch ?? '') !== (it.link_match || '')) {
+      const lm = validateLinkMatch(e.linkMatch);
+      if (!lm.ok) return msg($('qmsg'), `Mục ${it.label || it.id}: ${lm.message}`, 'bad');
+      ch.link_match = lm.value;
+    }
+    if (ch.options || 'referer' in ch || 'link_match' in ch) changes.push(ch); else state.edits.delete(id);
   }
   if (!changes.length) { updateEditBar(); return msg($('qmsg'), 'Không có thay đổi nào cần lưu.', 'warn'); }
   $('saveall').disabled = true;
@@ -376,8 +393,10 @@ function applyDefaultsToQueue() {
   if (!confirm(`Đặt tuỳ chọn mặc định (mục "Tuỳ chọn cho mục mới") cho ${targets.length} mục đang chờ/lỗi? Mới chỉ đánh dấu; bấm "Lưu tất cả thay đổi" để lưu.`)) return;
   for (const it of targets) {
     const w = { ...state.defaults };
-    const ref = state.edits.has(it.id) ? state.edits.get(it.id).referer : (it.referer || '');
-    if (sameOpts(w, normOpts(it.options)) && ref === (it.referer || '')) state.edits.delete(it.id); else state.edits.set(it.id, { options: w, referer: ref });
+    const prev = state.edits.get(it.id);
+    const ref = prev ? prev.referer : (it.referer || '');
+    const lmv = prev ? prev.linkMatch : (it.link_match || '');
+    if (sameOpts(w, normOpts(it.options)) && ref === (it.referer || '') && lmv === (it.link_match || '')) state.edits.delete(it.id); else state.edits.set(it.id, { options: w, referer: ref, linkMatch: lmv });
   }
   renderQueue();
   msg($('qmsg'), 'Đã đánh dấu thay đổi. Bấm "Lưu tất cả thay đổi" để lưu.', 'warn');

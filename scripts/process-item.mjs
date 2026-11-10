@@ -6,8 +6,8 @@ import path from 'node:path';
 import { loadSettings, loadProfiles, loadAllowedHosts, readJson, run, gh, spawnStream, killAll, log, mask, fmtBytes, fmtDur, slugify, tzParts, sha256File, freeBytes, sleep, getReleaseByTag } from './util.mjs';
 import { validateItem } from '../docs/lib/schema.mjs';
 import { PROVIDERS } from '../docs/lib/providers.mjs';
-import { Fail, resolve, probeUrl, headCheck, secretsOf, fileHead } from './resolvers.mjs';
-import { UA, browserHeaders, curlHeaderArgs, shouldFallbackToBrowser, probeVerdict, assessDownloadedHead, RETRYABLE_ERRORS } from './fetch-core.mjs';
+import { Fail, resolve, probeUrl, fetchFollow, headCheck, secretsOf, fileHead } from './resolvers.mjs';
+import { UA, browserHeaders, curlHeaderArgs, shouldFallbackToBrowser, probeVerdict, assessDownloadedHead, RETRYABLE_ERRORS, extractAnchors, pickLink, nameFromUrl, cookieHeaderFrom, handoffReferer } from './fetch-core.mjs';
 import { ensureBrowser } from './browser-setup.mjs';
 import { parseCrfSearch } from './parse.mjs';
 import { makePlan, buildPhoneArgs, verifyPhone } from './encode-plan.mjs';
@@ -180,10 +180,11 @@ function checkDownloaded(dest) {
 }
 
 // Mức 1: curl có header giống trình duyệt, tải tiếp được khi đứt (-C -).
-async function curlGet({ url, dest, maxBytes, timeoutMs, headers, ua = UA, cookiesFile = null }) {
+async function curlGet({ url, dest, maxBytes, timeoutMs, headers, ua = UA, cookiesFile = null, cookieString = '' }) {
   const args = ['--fail', '--location', '--max-redirs', '5', '--proto', '=https', '--proto-redir', '=https', '--retry', '5', '--retry-all-errors', '--retry-delay', '5',
     '-C', '-', '--connect-timeout', '30', '--speed-limit', '1024', '--speed-time', '180', '--silent', '--show-error', '-A', ua, ...curlHeaderArgs(headers)];
   if (cookiesFile) args.push('-b', cookiesFile);
+  else if (cookieString) args.push('-b', cookieString); // chuỗi "a=b; c=d" lấy từ Set-Cookie của trang (không bao giờ log)
   if (maxBytes) args.push('--max-filesize', String(maxBytes));
   args.push('-o', dest, url);
   const r = await spawnStream('curl', args, { timeoutMs });
@@ -201,7 +202,7 @@ async function curlGet({ url, dest, maxBytes, timeoutMs, headers, ua = UA, cooki
 }
 
 // Mức 2: Chrome thật qua Playwright (scripts/browser-fetch.mjs), chạy như tiến trình con.
-const BF_PASS = new Set(['browser_failed', 'browser_no_video', 'browser_unavailable', 'access_denied', 'not_found', 'rate_limited', 'timeout', 'input_too_big', 'not_a_video']);
+const BF_PASS = new Set(['link_not_found', 'browser_failed', 'browser_no_video', 'browser_unavailable', 'access_denied', 'not_found', 'rate_limited', 'timeout', 'input_too_big', 'not_a_video']);
 async function runBrowser(setup, job, timeoutMs) {
   const [cmd, args] = setup.headed ? [setup.xvfb, ['-a', process.execPath, 'scripts/browser-fetch.mjs']] : [process.execPath, ['scripts/browser-fetch.mjs']];
   const r = await spawnStream(cmd, args, {
@@ -232,7 +233,7 @@ async function browserDownload(plan, dest, maxBytes, ctx) {
   const setup = await ensureBrowser({ dir: bdir, version, wantHeaded: settings.browser_headed });
   const phaseMs = Math.min(settings.browser_phase_min * 60000, budgetDl());
   if (phaseMs < 60000) throw new Fail('timeout', 'Không còn đủ thời gian để mở trình duyệt.');
-  const job = { url: plan.url, ref: ctx.referer, dir: path.join(bdir, 'run'), chrome: setup.chrome, pwDir: setup.pwDir, headed: setup.headed, noSandbox: process.env.GITHUB_ACTIONS === 'true', maxBytes: maxBytes || ctx.maxIn, phaseMs };
+  const job = { url: plan.url, ref: ctx.referer, dir: path.join(bdir, 'run'), chrome: setup.chrome, pwDir: setup.pwDir, headed: setup.headed, noSandbox: process.env.GITHUB_ACTIONS === 'true', maxBytes: maxBytes || ctx.maxIn, phaseMs, linkClass: plan.linkClass || null, linkMatch: ctx.linkMatch || null };
   const res = await runBrowser(setup, job, phaseMs + 60000);
   const dropCookies = () => { if (res.cookiesFile) fs.rmSync(res.cookiesFile, { force: true }); };
   try {
@@ -274,6 +275,64 @@ async function downloadHttp(plan, dest, maxBytes, ctx) {
       fs.rmSync(dest, { force: true });
     }
   } else if (ctx.mode === 'auto') log('Bước kiểm tra cho thấy link bị chặn hoặc là trang web → dùng thẳng trình duyệt thật.');
+  return browserDownload(plan, dest, maxBytes, ctx);
+}
+
+// ---------- trang có nút tải (page_link): tìm thẻ <a> theo class, lấy href ngay lúc tải (token còn mới) ----------
+const readText = async (res, max = 2 * 1024 * 1024) => {
+  const reader = res.body.getReader();
+  const parts = [];
+  let n = 0;
+  while (n < max) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    parts.push(Buffer.from(value));
+    n += value.length;
+  }
+  await reader.cancel().catch(() => {});
+  return Buffer.concat(parts).toString('utf8');
+};
+const noLink = (reason, total, classes, match) => (reason === 'nomatch'
+  ? new Fail('link_not_found', `Có ${total} link trong thẻ a class "${classes.join(' ')}" nhưng không link nào chứa "${match}".`)
+  : new Fail('link_not_found', `Không thấy thẻ a nào có class "${classes.join(' ')}" (trang có thể tải link bằng JavaScript hoặc bị chặn).`));
+
+// Mức 1 của page_link: tải HTML bằng fetch có header giống trình duyệt rồi đọc thẻ <a>. Giữ cookie của trang để gửi kèm khi tải file.
+async function plainPageLink(plan, ctx) {
+  const { res, finalUrl } = await fetchFollow(plan.url, { hop: (u, i, prev) => browserHeaders(u, { ref: ctx.referer, first: plan.url, prev, doc: true }) });
+  if (res.status === 404 || res.status === 410) throw new Fail('not_found', 'Trang không còn tồn tại (404).');
+  if (res.status === 401 || res.status === 403) throw new Fail('access_denied', `Trang không cho mở (HTTP ${res.status}).`, { blocked: true });
+  if (res.status === 429) throw new Fail('rate_limited', 'Nguồn giới hạn tốc độ (HTTP 429), thử lại sau.');
+  if (res.status >= 400) throw new Fail(`http_${res.status}`, `Nguồn trả lỗi HTTP ${res.status}.`);
+  const cookieString = cookieHeaderFrom(typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []);
+  const html = await readText(res);
+  const pick = pickLink(extractAnchors(html, plan.linkClass, finalUrl), ctx.linkMatch);
+  if (!pick.url) throw noLink(pick.reason, pick.total, plan.linkClass, ctx.linkMatch);
+  mask(pick.url);
+  log(`Tìm thấy ${pick.matched ?? pick.total}/${pick.total} link khớp class${pick.matched > 1 ? ' (lấy link đầu tiên, hãy thêm "Lọc link" nếu cần đúng link khác)' : ''}.`);
+  return { url: pick.url, pageUrl: finalUrl, cookieString };
+}
+
+async function downloadPage(plan, dest, maxBytes, ctx) {
+  if (ctx.mode !== 'browser') {
+    let got = null;
+    try {
+      got = await plainPageLink(plan, ctx);
+    } catch (e) {
+      if (!(e instanceof Fail) || ctx.mode === 'curl' || !(e.blocked === true || e.code === 'access_denied' || e.code === 'link_not_found')) throw e;
+      log(`Mở trang bằng cách thường chưa lấy được link (${e.code}) → dùng trình duyệt thật.`);
+    }
+    if (got) {
+      try {
+        const headers = browserHeaders(got.url, { ref: handoffReferer(got.pageUrl, got.url, null) });
+        await curlGet({ url: got.url, dest, maxBytes, timeoutMs: budgetDl(), headers, cookieString: got.cookieString });
+        return { method: 'curl', file: dest, nameHint: nameFromUrl(got.url) };
+      } catch (e) {
+        if (!(e instanceof Fail) || !shouldFallbackToBrowser(e, ctx.mode)) throw e;
+        log(`Tải link vừa lấy bị chặn (${e.code}) → dùng trình duyệt thật.`);
+        fs.rmSync(dest, { force: true });
+      }
+    }
+  }
   return browserDownload(plan, dest, maxBytes, ctx);
 }
 
@@ -562,7 +621,7 @@ async function processItem(item) {
   const toolVer = { ffmpeg: ((await run('ffmpeg', ['-version'])).stdout.split('\n')[0] || '').replace(/ Copyright.*/, ''), abav1: (await run('ab-av1', ['--version'])).stdout.trim() };
 
   // resolve + kiểm tra link
-  const plan0 = await resolve(item.provider, item.ref);
+  const plan0 = await resolve(item.provider, item.ref, { allowedHosts: loadAllowedHosts() });
   for (const s of [plan0.url, ...(plan0.secrets || [])]) mask(s);
   const mode = opt.fetch_mode || 'auto';
   const referer = item.referer || null;
@@ -610,6 +669,12 @@ async function processItem(item) {
     plan0.nameHint = y.title;
     ytdlpVer = await ytdlpVersion(ytdlpBin);
     result.fetch_method = 'ytdlp';
+  } else if (plan0.kind === 'page') {
+    const d = await downloadPage(plan0, raw, maxIn, { mode, referer, linkMatch: item.link_match, maxIn });
+    raw = d.file;
+    if (d.nameHint) plan0.nameHint = d.nameHint;
+    if (d.method === 'ytdlp') ytdlpVer = await ytdlpVersion(ytdlpBin);
+    result.fetch_method = d.method;
   } else if (plan0.kind === 'gdown') {
     await downloadGdown(plan0, raw, Math.min(budgetMs(), hardMs() - 10 * 60000));
     result.fetch_method = 'gdown';

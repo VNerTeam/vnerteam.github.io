@@ -39,17 +39,17 @@ Mọi `/api/*` cần `Origin` đúng `ALLOWED_ORIGIN` và một trong hai: `Auth
 
 | Phương thức | Đường dẫn | Việc |
 |---|---|---|
-| POST | `/api/queue/add` | `{ items: [{ url, options, label?, referer? }] }` (`referer` = "Trang mở trước", https, không phải host nội bộ), tối đa 50 mục; Worker tự parse `url`, bỏ qua mọi `provider/ref` client gửi; một commit |
+| POST | `/api/queue/add` | `{ items: [{ url, options, label?, referer?, link_match? }] }` (`link_match` chỉ có tác dụng với link trang có nút tải, nếu không sẽ bị bỏ; `referer` = "Trang mở trước", https, không phải host nội bộ), tối đa 50 mục; Worker tự parse `url`, bỏ qua mọi `provider/ref` client gửi; một commit |
 | GET | `/api/queue` | `queue.json` + số mục theo trạng thái |
-| PATCH | `/api/queue/item/:id` | Sửa `options`/`label`/`referer` của một mục |
-| PATCH | `/api/queue/batch` | `{ changes: [{ id, options?, label?, referer? }] }`, tối đa 200 mục, áp trong **một lần ghi (một commit)**; mục sai/không tồn tại được báo riêng trong `results`, các mục còn lại vẫn áp. Trả `{ results, updated, counts }` |
+| PATCH | `/api/queue/item/:id` | Sửa `options`/`label`/`referer`/`link_match` của một mục |
+| PATCH | `/api/queue/batch` | `{ changes: [{ id, options?, label?, referer?, link_match? }] }`, tối đa 200 mục, áp trong **một lần ghi (một commit)**; mục sai/không tồn tại được báo riêng trong `results`, các mục còn lại vẫn áp. Trả `{ results, updated, counts }` |
 | DELETE | `/api/queue/item/:id` | Xóa mục |
 | POST | `/api/queue/retry/:id` | `failed` → `pending` |
 | POST | `/api/run` | `workflow_dispatch` (`mode`, `only_id`) |
 | GET | `/api/status` | Các lần chạy gần nhất + `days` (khoảng 14 ngày gần nhất, mỗi video có link bản thường/bản điện thoại) đọc từ `catalog.json` của release `muc-luc`, kèm `catalog_url` (cache ~30 giây). Nếu chưa có hoặc hỏng catalog thì tạm liệt kê các release `vid-` (nhận cả tag ngày lẫn tag cũ), `source` là `releases` |
 | GET | `/api/auth` | Cách đăng nhập hiện tại và đã đặt PIN chưa |
 | POST / DELETE | `/api/auth/pin` | Đặt / xoá PIN dự phòng (chỉ khi đăng nhập bằng password) |
-| GET | `/api/config` | `allowed_hosts` đọc từ repo |
+| GET | `/api/config` | `allowed_hosts` đọc từ repo (kèm `link_class` nếu có) |
 
 `/api/queue/batch` chỉ ghi `queue.json`, **không** kích hoạt workflow; chỉ `POST /api/run` (nút "Chạy ngay") mới chạy.
 

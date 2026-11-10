@@ -37,14 +37,23 @@ Mọi `/api/*` cần `Authorization: Bearer <password>` và `Origin` đúng `ALL
 |---|---|---|
 | POST | `/api/queue/add` | `{ items: [{ url, options, label? }] }`, tối đa 50 mục; Worker tự parse `url`, bỏ qua mọi `provider/ref` client gửi; một commit |
 | GET | `/api/queue` | `queue.json` + số mục theo trạng thái |
-| PATCH | `/api/queue/item/:id` | Sửa `options`/`label` |
+| PATCH | `/api/queue/item/:id` | Sửa `options`/`label` của một mục |
+| PATCH | `/api/queue/batch` | `{ changes: [{ id, options?, label? }] }`, tối đa 200 mục, áp trong **một lần ghi (một commit)**; mục sai/không tồn tại được báo riêng trong `results`, các mục còn lại vẫn áp. Trả `{ results, updated, counts }` |
 | DELETE | `/api/queue/item/:id` | Xóa mục |
 | POST | `/api/queue/retry/:id` | `failed` → `pending` |
 | POST | `/api/run` | `workflow_dispatch` (`mode`, `only_id`) |
-| GET | `/api/status` | Các lần chạy gần nhất + release video (cache ~30 giây) |
+| GET | `/api/status` | Các lần chạy gần nhất + `days` (khoảng 14 ngày gần nhất, mỗi video có link bản thường/bản điện thoại) đọc từ `catalog.json` của release `muc-luc`, kèm `catalog_url` (cache ~30 giây). Nếu chưa có hoặc hỏng catalog thì tạm liệt kê các release `vid-` (nhận cả tag ngày lẫn tag cũ), `source` là `releases` |
 | GET | `/api/config` | `allowed_hosts` đọc từ repo |
 
+`/api/queue/batch` chỉ ghi `queue.json`, **không** kích hoạt workflow; chỉ `POST /api/run` (nút "Chạy ngay") mới chạy.
+
+Biến `TIMEZONE` trong `wrangler.toml` (mặc định `Asia/Ho_Chi_Minh`) chỉ dùng để hiển thị giờ khi phải dựng danh sách từ release; nên trùng `config/settings.json`.
+
 Giới hạn: body ≤ 64 KB, ≤ 200 mục trong queue, `queue.json` ≤ 1 MB. Xung đột sha khi ghi được đọc lại và áp lại tối đa 5 lần.
+
+## Cập nhật Worker
+
+Worker import `docs/lib/*.mjs`. Mỗi khi đổi mã trong `worker/` hoặc `docs/lib/`, chạy lại `wrangler deploy` trong `worker/`.
 
 ## Kiểm thử
 

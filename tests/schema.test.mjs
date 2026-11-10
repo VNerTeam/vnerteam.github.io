@@ -11,6 +11,8 @@ const goodItem = () => ({
 
 test('menu khớp profiles.json', () => {
   assert.deepEqual(OPTION_CHOICES.resolution.map((x) => x[0]).sort(), Object.keys(profiles.resolutions).sort());
+  assert.ok(OPTION_CHOICES.phone.some(([v]) => v === true) && OPTION_CHOICES.phone.some(([v]) => v === false));
+  assert.ok(profiles.phone && profiles.phone.crf === 25 && profiles.phone.caps.length === 2 && profiles.phone.max_long_edge === 1920);
   assert.deepEqual(OPTION_CHOICES.quality.map((x) => x[0]).sort(), Object.keys(profiles.qualities).sort());
   for (const [v] of OPTION_CHOICES.audio) if (v !== 'copy') assert.ok(profiles.audio[v], v);
 });
@@ -46,4 +48,23 @@ test('label, id, dedupe, queue', () => {
   assert.equal(serializeQueue(q), '{\n  "version": 1,\n  "items": []\n}\n');
   assert.throws(() => parseQueue('{"version":2,"items":[]}'));
   assert.throws(() => parseQueue('khong json'));
+});
+
+test('mặc định mới và tuỳ chọn phone', () => {
+  assert.deepEqual(defaultOptions(), { resolution: 'original', quality: 'strong', codec: 'hevc', fps_cap: null, audio: 'opus_128', container: 'mkv', phone: true, min_vmaf: null });
+  assert.equal(validateOptions({ phone: false }).value.phone, false);
+  for (const bad of [{ phone: 'true' }, { phone: 1 }, { phone: null }]) assert.equal(validateOptions(bad).ok, false, JSON.stringify(bad));
+});
+test('dữ liệu cũ chưa có khoá phone vẫn hợp lệ và KHÔNG bị đổi theo mặc định mới', () => {
+  const old = { resolution: 'fhd', quality: 'balanced', codec: 'av1', fps_cap: null, audio: 'opus_128', container: 'mkv', min_vmaf: null };
+  const item = { ...goodItem(), options: old };
+  const v = validateItem(item);
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.value.options, { ...old, phone: true });
+  assert.equal(v.value.options.resolution, 'fhd'); assert.equal(v.value.options.codec, 'av1');
+});
+test('dedupeKey với boolean', () => {
+  const o = defaultOptions();
+  assert.notEqual(dedupeKey('gdrive', { id: 'x' }, { ...o, phone: true }), dedupeKey('gdrive', { id: 'x' }, { ...o, phone: false }));
+  assert.equal(dedupeKey('gdrive', { id: 'x' }, { ...o }), dedupeKey('gdrive', { id: 'x' }, { ...o }));
 });

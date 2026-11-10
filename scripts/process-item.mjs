@@ -3,11 +3,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadSettings, loadProfiles, loadAllowedHosts, run, gh, spawnStream, killAll, log, mask, fmtBytes, fmtDur, slugify, tzParts, sha256File, freeBytes, sleep } from './util.mjs';
+import { loadSettings, loadProfiles, loadAllowedHosts, run, gh, spawnStream, killAll, log, mask, fmtBytes, fmtDur, slugify, tzParts, sha256File, freeBytes, sleep, getReleaseByTag } from './util.mjs';
 import { validateItem } from '../docs/lib/schema.mjs';
 import { PROVIDERS } from '../docs/lib/providers.mjs';
 import { Fail, resolve, probeUrl, headCheck, secretsOf, fileHead } from './resolvers.mjs';
 import { parseCrfSearch } from './parse.mjs';
+import { makePlan, buildPhoneArgs, verifyPhone } from './encode-plan.mjs';
+import { dayTagOf, dayTitle, dateDash, assetNames, isMainAsset, tzHM, downloadUrl } from '../docs/lib/catalog.mjs';
 
 const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
@@ -20,7 +22,6 @@ const profiles = loadProfiles();
 const REPO = process.env.GITHUB_REPOSITORY;
 const BRANCH = process.env.DEFAULT_BRANCH || 'main';
 const START = Number(process.env.JOB_START_EPOCH) * 1000 || Date.now();
-const RES_LABEL = { original: 'Gốc', hd: 'HD', fhd: 'FHD', '2k': '2K', '4k': '4K' };
 const Q_LABEL = { good: 'Tốt', balanced: 'Cân bằng', strong: 'Mạnh' };
 
 const budgetMs = () => START + settings.time_budget_min * 60000 - Date.now() - settings.reserve_min * 60000; // thời gian còn dùng cho tải+nén
@@ -82,41 +83,6 @@ function analyze(j) {
 function buildLadder(codec, quality) {
   const q = profiles.qualities[quality];
   return profiles.ladder[codec].map((s) => ({ encoder: s.encoder, preset: s.preset === '@quality' ? (s.encoder === 'libsvtav1' ? q.svtav1_preset : q.x265_preset) : s.preset }));
-}
-function makePlan(opt, a) {
-  const targetH = profiles.resolutions[opt.resolution].height;
-  const effH = a.rotated ? a.width : a.height;
-  const scaleH = targetH && effH > targetH ? targetH : null; // chỉ thu nhỏ
-  const fpsCap = opt.fps_cap && a.fps > opt.fps_cap + 0.5 ? opt.fps_cap : null;
-  const vf = [scaleH ? `scale=-2:${scaleH}:flags=lanczos` : null, fpsCap ? `fps=${fpsCap}` : null].filter(Boolean).join(',') || null;
-  const notes = [];
-  const color = [];
-  if (a.hdr) {
-    for (const [k, v] of [['color_primaries', a.v.color_primaries], ['color_trc', a.v.color_transfer], ['colorspace', a.v.color_space]]) {
-      if (v && /^[a-z0-9_-]+$/.test(v) && v !== 'unknown') color.push(`-${k}`, v);
-    }
-    notes.push('Nguồn HDR: giữ 10-bit và thẻ màu, không tone-map. Siêu dữ liệu HDR tĩnh (mastering display) có thể không được giữ.');
-  }
-  const audio = a.audio.map((s) => {
-    let mode = opt.audio;
-    if (mode === 'copy') {
-      if (opt.container === 'mp4' && !['aac', 'mp3', 'ac3', 'eac3', 'opus', 'alac', 'flac'].includes(s.codec)) {
-        mode = 'aac_128';
-        notes.push(`Âm thanh ${s.codec} không vào được MP4 nên đã chuyển sang AAC.`);
-      } else return { index: s.index, copy: true };
-    }
-    const p = profiles.audio[mode];
-    return { index: s.index, copy: false, codec: p.codec, kbps: Math.round(p.kbps * Math.max(1, s.channels / 2)), channels: s.channels };
-  });
-  const textSubs = ['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text'];
-  let subs = a.subs.map((s) => s.index);
-  if (opt.container === 'mp4') {
-    const dropped = a.subs.filter((s) => !textSubs.includes(s.codec)).length;
-    subs = a.subs.filter((s) => textSubs.includes(s.codec)).map((s) => s.index);
-    if (dropped) notes.push(`Đã bỏ ${dropped} phụ đề dạng ảnh vì MP4 không chứa được.`);
-  }
-  if (a.v.codec_name && a.hdr === false && a.pixFmt && /422|444/.test(a.pixFmt)) notes.push('Nguồn 4:2:2/4:4:4 được đổi về 4:2:0.');
-  return { scaleH, fpsCap, vf, color, audio, subs, attach: opt.container === 'mkv', pixFmt: 'yuv420p10le', notes };
 }
 
 // ---------- ab-av1 crf-search ----------
@@ -314,80 +280,98 @@ async function downloadYtdlp(plan, dir, maxBytes) {
   return a;
 }
 
-// ---------- release ----------
-async function findExistingRelease(hash6) {
-  const r = await gh(['release', 'list', '--repo', REPO, '--limit', '300', '--json', 'tagName,isDraft']);
-  if (r.code !== 0) throw new Fail('gh_error', `Không đọc được release: ${r.stderr.slice(0, 160)}`);
-  for (const h of JSON.parse(r.stdout || '[]').filter((x) => x.tagName.startsWith('vid-') && x.tagName.endsWith(`-${hash6}`))) {
-    if (h.isDraft) {
-      await gh(['release', 'delete', h.tagName, '--repo', REPO, '--yes', '--cleanup-tag']); // bản nháp dở dang của lần trước
-      continue;
+// ---------- release theo ngày ----------
+const okAsset = (x) => !!x && x.state === 'uploaded' && x.size > 0;
+const relErr = (e) => new Fail('gh_error', String(e.message || e).slice(0, 200));
+function dayInfo(date = new Date()) {
+  const p = tzParts(date, settings.timezone);
+  const ymd = `${p.y}${p.mo}${p.d}`;
+  return { ymd, tag: dayTagOf(ymd), date: `${p.y}-${p.mo}-${p.d}`, time: `${p.h}:${p.mi}`, at: `${p.y}-${p.mo}-${p.d} ${p.h}:${p.mi} (${settings.timezone})` };
+}
+
+// Chống làm lại: tìm trong release ngày hôm nay và hôm qua xem đã có bản thường (tên chứa -hash6-, uploaded, size > 0) chưa.
+async function findExisting(hash6) {
+  const now = Date.now();
+  for (const t of [now, now - 86400000]) {
+    const info = dayInfo(new Date(t));
+    let rel;
+    try {
+      rel = await getReleaseByTag(REPO, info.tag);
+    } catch (e) {
+      throw relErr(e);
     }
-    const v = await gh(['release', 'view', h.tagName, '--repo', REPO, '--json', 'assets']);
-    if (v.code === 0 && (JSON.parse(v.stdout).assets || []).some((x) => x.state === 'uploaded' && x.size > 0)) return h.tagName;
-    await gh(['release', 'delete', h.tagName, '--repo', REPO, '--yes', '--cleanup-tag']); // release dở dang, chưa có file
+    if (!rel) continue;
+    const assets = (rel.assets || []).filter(okAsset);
+    const main = assets.find((x) => isMainAsset(x.name) && x.name.includes(`-${hash6}-`));
+    if (!main) continue;
+    const phone = assets.find((x) => x.name === main.name.replace(/-(av1|hevc)\.(mkv|mp4)$/, '-phone.mp4'));
+    return { tag: info.tag, ymd: info.tag.slice(4), main, phone };
   }
   return null;
 }
-async function assetOk(tag, name, size) {
-  // Dùng danh sách release (có cả bản nháp). `gh release view <tag>` không thấy bản nháp nên trước đây luôn báo chưa đạt.
-  const v = await gh(['api', `repos/${REPO}/releases?per_page=30`]);
-  if (v.code !== 0) {
-    log(`  không đọc được danh sách release: ${(v.stderr || '').trim().slice(-160)}`);
-    return false;
+
+// Tạo release ngày nếu chưa có, chịu được race giữa các job chạy song song.
+async function ensureDayRelease(info) {
+  let last = '';
+  for (let i = 1; i <= 5; i++) {
+    const v = await gh(['release', 'view', info.tag, '--repo', REPO, '--json', 'tagName']);
+    if (v.code === 0) return;
+    const c = await gh(['release', 'create', info.tag, '--repo', REPO, '--title', dayTitle(info.ymd, 1), '--notes', 'Danh sách video của ngày này sẽ được cập nhật khi lượt chạy hoàn tất.', '--target', BRANCH, '--latest=false']);
+    if (c.code === 0) return;
+    last = (c.stderr || '').trim().slice(-160);
+    log(`  tạo release ${info.tag} chưa được (lần ${i}/5): ${last}`); // thường là job khác vừa tạo xong ("already exists"); vòng sau xem lại
+    await sleep(1000 * i + Math.random() * 1000);
   }
+  throw new Fail('release_failed', `Không tạo/đọc được release ${info.tag}: ${last}`);
+}
+
+const deleteAsset = (tag, name) => gh(['release', 'delete-asset', tag, name, '--repo', REPO, '--yes']); // chỉ xoá asset của mục này, không bao giờ xoá release ngày
+
+async function getAsset(tag, name) {
   let rel;
   try {
-    rel = JSON.parse(v.stdout).find((r) => r.tag_name === tag);
-  } catch {
-    log('  danh sách release trả về không phải JSON');
-    return false;
+    rel = await getReleaseByTag(REPO, tag);
+  } catch (e) {
+    log(`  ${String(e.message).slice(0, 160)}`);
+    return null;
   }
   if (!rel) {
-    log(`  không thấy release ${tag} trong danh sách`);
-    return false;
+    log(`  chưa thấy release ${tag}`);
+    return null;
   }
   const a = (rel.assets || []).find((x) => x.name === name);
-  if (!a) {
-    log(`  release chưa có asset ${name} (hiện có: ${(rel.assets || []).map((x) => x.name).join(', ') || 'không có'})`);
-    return false;
-  }
+  if (!a) log(`  release chưa có asset ${name} (hiện có ${(rel.assets || []).length} asset)`);
+  return a || null;
+}
+async function assetOk(tag, name, size) {
+  const a = await getAsset(tag, name);
+  if (!a) return false;
   if (a.state !== 'uploaded' || a.size !== size) {
-    log(`  asset state=${a.state}, size=${a.size} (cần ${size})`);
+    log(`  asset ${name}: state=${a.state}, size=${a.size} (cần ${size})`);
     return false;
   }
   return true;
 }
-function tagFor(id) {
-  const p = tzParts(new Date(), settings.timezone);
-  return { tag: `vid-${p.y}${p.mo}${p.d}-${p.h}${p.mi}${p.s}-${id.slice(-6)}`, date: `${p.y}-${p.mo}-${p.d}`, at: `${p.y}-${p.mo}-${p.d} ${p.h}:${p.mi} (${settings.timezone})` };
-}
 
-async function publishRelease({ id, assetPath, assetName, title, notes, sha, size }) {
-  const { tag } = tagFor(id);
-  const notesFile = path.join(workDir, 'notes.md');
-  fs.writeFileSync(notesFile, notes);
-  await gh(['release', 'delete', tag, '--repo', REPO, '--yes', '--cleanup-tag']); // dọn bản trùng tag (nếu có)
-  // Tạo luôn release chính thức, rồi upload file vào. Lỗi thì xoá release đi (cleanFail).
-  const c = await gh(['release', 'create', tag, '--repo', REPO, '--title', title, '--notes-file', notesFile, '--target', BRANCH, '--latest=false']);
-  if (c.code !== 0) throw new Fail('release_failed', `Không tạo được release: ${c.stderr.slice(0, 160)}`);
-  const cleanFail = async (code, msg) => {
-    await gh(['release', 'delete', tag, '--repo', REPO, '--yes', '--cleanup-tag']);
-    throw new Fail(code, msg);
-  };
-  // gh lấy tên asset từ TÊN FILE, nên phải đổi file "out.mp4" thành đúng assetName trước khi upload.
+// Upload 1 asset vào release ngày, xác nhận từng asset (state, size, digest). Lỗi thì chỉ xoá asset này.
+async function uploadAsset(tag, filePath, assetName, size, sha) {
+  // gh lấy tên asset từ TÊN FILE, nên đặt đúng tên bằng hard link (không tốn thêm dung lượng đĩa)
   const staged = path.join(workDir, assetName);
   fs.rmSync(staged, { force: true });
   try {
-    fs.linkSync(assetPath, staged); // hard link: không tốn thêm dung lượng đĩa
+    fs.linkSync(filePath, staged);
   } catch {
-    fs.copyFileSync(assetPath, staged);
+    fs.copyFileSync(filePath, staged);
   }
+  const bail = async (code, msg) => {
+    await deleteAsset(tag, assetName);
+    throw new Fail(code, msg);
+  };
   let good = false;
   try {
     for (let i = 1; i <= 3 && !good; i++) {
-      if (hardMs() < 2 * 60000) await cleanFail('timeout', 'Hết thời gian khi upload.');
-      log(`Upload asset (lần ${i}/3)…`);
+      if (hardMs() < 2 * 60000) await bail('timeout', 'Hết thời gian khi upload.');
+      log(`Upload ${assetName} (lần ${i}/3)…`);
       const u = await spawnStream('gh', ['release', 'upload', tag, staged, '--repo', REPO, '--clobber'], { timeoutMs: hardMs() - 60000 });
       good = u.code === 0 && (await assetOk(tag, assetName, size));
       if (!good) {
@@ -398,15 +382,65 @@ async function publishRelease({ id, assetPath, assetName, title, notes, sha, siz
   } finally {
     fs.rmSync(staged, { force: true });
   }
-  if (!good) await cleanFail('upload_failed', 'Upload asset không được xác nhận sau 3 lần.');
-  // Xác nhận lần cuối qua API (digest SHA256 nếu có)
-  const api = await gh(['api', `repos/${REPO}/releases/tags/${tag}`]);
-  if (api.code !== 0) await cleanFail('upload_failed', 'Không đọc lại được release sau khi upload.');
-  const asset = (JSON.parse(api.stdout).assets || []).find((x) => x.name === assetName);
-  if (!asset || asset.state !== 'uploaded' || asset.size !== size) await cleanFail('upload_failed', 'Asset trên release không khớp dung lượng.');
-  if (asset.digest && asset.digest !== `sha256:${sha}`) await cleanFail('upload_failed', 'SHA256 của asset không khớp file cục bộ.');
-  log(`Đã xác nhận release ${tag}${asset.digest ? ' (khớp SHA256)' : ''}.`);
-  return tag;
+  if (!good) await bail('upload_failed', `Upload ${assetName} không được xác nhận sau 3 lần.`);
+  const asset = await getAsset(tag, assetName);
+  if (!asset || asset.state !== 'uploaded' || asset.size !== size) await bail('upload_failed', `Asset ${assetName} trên release không khớp dung lượng.`);
+  if (asset.digest && asset.digest !== `sha256:${sha}`) await bail('upload_failed', `SHA256 của ${assetName} không khớp file cục bộ.`);
+  log(`Đã xác nhận ${assetName} trên ${tag}${asset.digest ? ' (khớp SHA256)' : ''}.`);
+  return { name: assetName, size, url: asset.browser_download_url || downloadUrl(REPO, tag, assetName) };
+}
+
+// ---------- bản điện thoại ----------
+let ffCaps = null;
+async function getFfCaps() {
+  if (ffCaps) return ffCaps;
+  const enc = (await run('ffmpeg', ['-hide_banner', '-encoders'])).stdout;
+  const fil = (await run('ffmpeg', ['-hide_banner', '-filters'])).stdout;
+  ffCaps = { x264: /\blibx264\b/.test(enc), aac: /^\s*A\S*\s+aac\s/m.test(enc), zscale: /\bzscale\b/.test(fil), tonemap: /\btonemap\b/.test(fil) };
+  return ffCaps;
+}
+
+// Làm bản H.264 cho điện thoại TỪ BẢN THƯỜNG (không làm từ nguồn). Mọi lỗi đều trả về { ok:false, reason }, không bao giờ làm hỏng cả mục.
+async function makePhone({ normalPath, src }) {
+  const profile = profiles.phone;
+  if (!profile) return { ok: false, reason: 'thiếu khoá "phone" trong config/profiles.json' };
+  const caps = await getFfCaps();
+  if (!caps.x264 || !caps.aac) return { ok: false, reason: 'ffmpeg thiếu libx264 hoặc aac' };
+  const timeoutMs = Math.min(budgetMs(), hardMs() - 5 * 60000);
+  if (timeoutMs < Math.max(60000, src.duration * 1000 * 0.3)) return { ok: false, reason: 'không còn đủ thời gian trong ngân sách' };
+  const out = path.join(workDir, 'phone.mp4');
+  try {
+    const o = analyze(await ffprobe(normalPath));
+    const tonemap = caps.zscale && caps.tonemap;
+    const built = buildPhoneArgs({ input: normalPath, output: out, o, hdr: src.hdr, tonemap, profile });
+    const notes = [];
+    if (src.hdr) notes.push(tonemap ? 'Bản điện thoại: đã tone-map HDR → SDR (hable).' : 'Bản điện thoại: ffmpeg thiếu zscale/tonemap nên không tone-map, màu có thể nhạt.');
+    log(`ffmpeg (điện thoại): libx264 -crf ${profile.crf} -preset ${profile.preset} maxrate ${built.maxrate}${src.hdr ? (tonemap ? ', tone-map HDR' : ', KHÔNG tone-map (thiếu zscale)') : ''}`);
+    let lastLog = 0;
+    const [cmd, a] = withTime('ffmpeg', built.args);
+    const r = await spawnStream(cmd, a, {
+      timeoutMs,
+      onLine: (l, w) => {
+        const m = /^out_time_us=(\d+)/.exec(l);
+        if (w === 'out' && m && Date.now() - lastLog > 120000) {
+          lastLog = Date.now();
+          log(`  điện thoại: ${Math.min(99, (Number(m[1]) / 1e6 / src.duration) * 100).toFixed(1)}%`);
+        } else if (w === 'err' && !l.startsWith('\t') && !l.startsWith('Command ')) log(`  ffmpeg: ${l.slice(0, 200)}`);
+      },
+    });
+    logPeakRam(r.stderr, 'ffmpeg điện thoại');
+    if (r.timedOut) return { ok: false, reason: 'hết thời gian khi làm bản điện thoại' };
+    if (r.code !== 0) return { ok: false, reason: `ffmpeg lỗi (mã ${r.code}): ${r.stderr.split('\n').filter((x) => x.trim()).slice(-1)[0] || ''}`.slice(0, 200) };
+    const p = analyze(await ffprobe(out));
+    const bad = verifyPhone(p, src);
+    if (bad) return { ok: false, reason: `không qua kiểm tra: ${bad}` };
+    const size = fs.statSync(out).size;
+    if (size <= 0) return { ok: false, reason: 'file điện thoại rỗng' };
+    if (size >= ASSET_LIMIT) return { ok: false, reason: `file ${fmtBytes(size)} ≥ 2 GiB, không đăng được` };
+    return { ok: true, path: out, size, res: `${p.width}x${p.height}`, maxrate: built.maxrate, notes };
+  } catch (e) {
+    return { ok: false, reason: String(e.message || e).slice(0, 200) };
+  }
 }
 
 // ---------- luồng chính ----------
@@ -418,10 +452,16 @@ async function processItem(item) {
   for (const s of secretsOf(item.provider, item.ref)) mask(s);
   log(`Mục ${item.id} • ${PROVIDERS[item.provider].label} • ${opt.resolution}/${opt.quality}/${opt.codec}`);
 
-  const existing = await findExistingRelease(hash6);
+  const existing = await findExisting(hash6);
   if (existing) {
-    log(`Đã có release ${existing} cho mục này, bỏ qua nén lại.`);
-    Object.assign(result, { ok: true, tag: existing, skipped: true });
+    log(`Đã có bản thường của mục này trong release ${existing.tag}, bỏ qua nén lại.`);
+    const m = /^(.+)-[0-9a-f]{6}-(av1|hevc)\.(mkv|mp4)$/.exec(existing.main.name);
+    const f = (x) => ({ name: x.name, size: x.size, url: x.browser_download_url || downloadUrl(REPO, existing.tag, x.name) });
+    const when = existing.main.created_at || new Date().toISOString();
+    Object.assign(result, {
+      ok: true, skipped: true, thin: true, tag: existing.tag, date: dateDash(existing.ymd), time: tzHM(when, settings.timezone), finished_at: when,
+      name: m ? m[1] : item.label || 'video', out_bytes: existing.main.size, main: f(existing.main), phone: existing.phone ? f(existing.phone) : null,
+    });
     return;
   }
 
@@ -439,7 +479,8 @@ async function processItem(item) {
   }
   const maxIn = settings.max_input_gb * GiB;
   if (remote && remote > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(remote)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);
-  const need = (remote || maxIn) * 2 + 2 * GiB;
+  // Đỉnh dùng đĩa: nguồn + bản thường (lúc nén), hoặc bản thường + bản điện thoại (nguồn đã xoá). Mỗi bản ra < 2 GiB.
+  const need = Math.max((remote || maxIn) * 2, 2 * ASSET_LIMIT) + 2 * GiB;
   const free = freeBytes(workDir);
   if (free < need) throw new Fail('no_disk', `Đĩa trống ${fmtBytes(free)}, cần ít nhất ${fmtBytes(need)}. Bật free_disk_space hoặc giảm max_input_gb.`);
 
@@ -462,7 +503,7 @@ async function processItem(item) {
 
   const a = analyze(await ffprobe(input));
   log(`Nguồn: ${a.width}x${a.height} @${a.fps.toFixed(2)}fps, ${a.codec}, ${a.pixFmt}, ${fmtDur(a.duration)}, ${a.audio.length} âm thanh${a.hdr ? ', HDR' : ''}`);
-  const plan = makePlan(opt, a);
+  const plan = makePlan(opt, a, profiles);
   const ladder = buildLadder(opt.codec, opt.quality);
   const outPath = path.join(workDir, `out.${opt.container}`);
   const tmp = path.join(workDir, 'ab-av1-tmp');
@@ -472,6 +513,7 @@ async function processItem(item) {
   let stepIdx = Math.min(item.ladder_start || 0, ladder.length - 1);
   let search;
   let encStart;
+  let encSeconds = 0;
   for (;;) {
     // tìm CRF, hạ nấc tốc độ nếu dự đoán vượt ngân sách
     let lastPred = null;
@@ -517,40 +559,53 @@ async function processItem(item) {
     result.crf = search.crf;
     result.ladder_step = stepIdx;
     result.final_vmaf_target = minVmaf;
+    encSeconds = Math.round((Date.now() - encStart) / 1000);
     break;
   }
   result.in_bytes = inSize;
-  fs.rmSync(input, { force: true }); // lấy lại chỗ trước khi upload
+  fs.rmSync(input, { force: true }); // lấy lại chỗ: bản điện thoại làm từ bản thường nên không cần nguồn nữa
 
-  // release
+  // ---- bản thường: lên release của ngày ----
   const sha = await sha256File(outPath);
   const step = ladder[stepIdx];
-  const { date, at } = tagFor(item.id);
-  const nameBase = item.label || (plan0.nameHint ? plan0.nameHint.replace(/\.[A-Za-z0-9]{2,4}$/, '') : 'video');
-  const assetName = `${slugify(nameBase, 80, true)}-${opt.resolution}-${opt.codec}.${opt.container}`;
-  const title = `[${date}] ${item.label || nameBase} · ${RES_LABEL[opt.resolution]} · ${Q_LABEL[opt.quality]} · ${opt.codec.toUpperCase()}`;
+  const info = dayInfo();
   const o2 = analyze(await ffprobe(outPath));
-  const saved = ((1 - result.out_bytes / inSize) * 100).toFixed(1);
-  const notes = [
-    '| Mục | Giá trị |', '|---|---|',
-    `| Dung lượng | ${fmtBytes(inSize)} → ${fmtBytes(result.out_bytes)} (giảm ${saved}%) |`,
-    `| Thời lượng | ${fmtDur(a.duration)} |`,
-    `| Độ phân giải | ${a.width}x${a.height} → ${o2.width}x${o2.height} |`,
-    `| Codec | ${opt.codec.toUpperCase()} (${step.encoder}) |`,
-    `| CRF | ${search.crf} |`,
-    `| VMAF mục tiêu / dự đoán | ≥ ${minVmaf} / ${search.vmaf} |`,
-    `| Mức / preset | ${Q_LABEL[opt.quality]} / ${step.preset} |`,
-    `| Thời gian nén | ${fmtDur((Date.now() - encStart) / 1000)} |`,
-    `| Phiên bản | ${toolVer.ffmpeg}; ab-av1 ${toolVer.abav1}${ytdlpVer ? `; yt-dlp ${ytdlpVer}` : ''} |`,
-    `| Thời điểm | ${at} |`,
-    `| Nguồn | ${PROVIDERS[item.provider].label} |`,
-    `| SHA256 | \`${sha}\` |`,
-    ...(plan.notes.length ? ['', ...plan.notes.map((n) => `- ${n}`)] : []),
-    '', '_Tạo tự động từ hàng đợi cá nhân của chủ repo._',
-  ].join('\n');
-  result.tag = await publishRelease({ id: item.id, assetPath: outPath, assetName, title, notes, sha, size: result.out_bytes });
-  result.ok = true;
-  fs.rmSync(outPath, { force: true }); // chỉ xóa file ra sau khi đã xác nhận release
+  const nameBase = item.label || (plan0.nameHint ? plan0.nameHint.replace(/\.[A-Za-z0-9]{2,4}$/, '') : 'video');
+  const names = assetNames({ slug: slugify(nameBase, 60, true), id: item.id, codec: opt.codec, container: opt.container });
+  await ensureDayRelease(info);
+  const mainUp = await uploadAsset(info.tag, outPath, names.main, result.out_bytes, sha);
+  Object.assign(result, {
+    ok: true, tag: info.tag, date: info.date, time: info.time, finished_at: new Date().toISOString(), name: nameBase.slice(0, 120), duration: Math.round(a.duration),
+    main: { ...mainUp, res: `${o2.width}x${o2.height}`, codec: opt.codec, crf: search.crf, vmaf: search.vmaf, preset: String(step.preset) },
+    notes: [...plan.notes],
+    tech: {
+      res_in: `${a.width}x${a.height}`, res_out: `${o2.width}x${o2.height}`, codec_label: `${opt.codec.toUpperCase()} (${step.encoder})`, crf: search.crf, vmaf_target: minVmaf, vmaf_pred: search.vmaf,
+      quality_label: Q_LABEL[opt.quality], preset: String(step.preset), encode_seconds: encSeconds,
+      tools: `${toolVer.ffmpeg}; ab-av1 ${toolVer.abav1}${ytdlpVer ? `; yt-dlp ${ytdlpVer}` : ''}`, at: info.at, source: PROVIDERS[item.provider].label, sha256: sha,
+    },
+  });
+
+  // ---- bản điện thoại (tuỳ chọn): lỗi ở đây KHÔNG làm hỏng mục, chỉ bỏ bản điện thoại ----
+  result.phone = null;
+  if (opt.phone) {
+    let ph;
+    try {
+      ph = await makePhone({ normalPath: outPath, src: a });
+      if (ph.ok) {
+        const psha = await sha256File(ph.path);
+        const up = await uploadAsset(info.tag, ph.path, names.phone, ph.size, psha);
+        result.phone = { ...up, res: ph.res, codec: 'h264', crf: profiles.phone.crf, maxrate: ph.maxrate, preset: profiles.phone.preset };
+        result.notes.push(...ph.notes);
+      }
+    } catch (e) {
+      ph = { ok: false, reason: e instanceof Fail ? e.message : `lỗi bất ngờ: ${String(e.message || e)}` };
+    }
+    if (!ph.ok) {
+      result.phone_skipped = String(ph.reason).slice(0, 200);
+      log(`::warning::Bỏ bản điện thoại: ${result.phone_skipped}`);
+    }
+  }
+  fs.rmSync(outPath, { force: true }); // chỉ xoá file ra sau khi đã xác nhận trên release
 }
 
 async function main() {

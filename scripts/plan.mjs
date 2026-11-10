@@ -1,5 +1,5 @@
 // Đọc queue → validate → chọn mục → xuất matrix. Chỉ đọc, không ghi queue.
-import { loadSettings, loadAllowedHosts, readQueue, countTodayReleases, setOutput, summary } from './util.mjs';
+import { loadSettings, loadAllowedHosts, readQueue, countTodayVideos, setOutput, summary } from './util.mjs';
 import { validateItem } from '../docs/lib/schema.mjs';
 
 const settings = loadSettings();
@@ -25,7 +25,7 @@ let slots = settings.max_items_per_run;
 let dayLimit = false;
 let usedToday = 0;
 if (mode !== 'dry_run') {
-  usedToday = await countTodayReleases(repo, settings.timezone);
+  usedToday = await countTodayVideos(repo, settings.timezone);
   const left = settings.max_items_per_day - usedToday;
   if (left < slots) slots = Math.max(0, left);
   dayLimit = left <= 0;
@@ -50,7 +50,7 @@ setOutput('day_limit', dayLimit ? 'true' : 'false');
 
 const lines = [`### Kế hoạch (chế độ: \`${mode}\`)`, '',
   `- Mục hợp lệ: ${valid.length} (chờ: ${valid.filter((i) => i.status === 'pending').length}, lỗi: ${valid.filter((i) => i.status === 'failed').length})`,
-  `- Sẽ xử lý lần này: **${picked.length}** (tối đa ${settings.max_items_per_run}/lần, ${settings.max_items_per_day}/ngày; hôm nay đã tạo ${usedToday} release)`];
+  `- Sẽ xử lý lần này: **${picked.length}** (tối đa ${settings.max_items_per_run}/lần, ${settings.max_items_per_day}/ngày; hôm nay đã đăng ${usedToday} video)`];
 if (dayLimit) lines.push('- ⚠️ Đã chạm hạn mức ngày. Các mục chờ được giữ nguyên, hãy bấm "Chạy ngay" vào ngày mai.');
 if (invalid.length) lines.push(`- ⚠️ ${invalid.length} mục sai schema sẽ bị đánh dấu lỗi.`);
 if (mode === 'dry_run') for (const i of picked) lines.push(`  - \`${i.id}\` ${i.provider} (${i.options.resolution}/${i.options.quality}/${i.options.codec})`);

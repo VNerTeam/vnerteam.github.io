@@ -2,6 +2,7 @@
 // Luật lọc link/tuỳ chọn dùng chung với trình duyệt và workflow (docs/lib/*.mjs).
 import { parseLink } from '../../docs/lib/providers.mjs';
 import { validateOptions, validateLabel, newItemId, dedupeKey, parseQueue, serializeQueue, LIMITS, ID_RE } from '../../docs/lib/schema.mjs';
+import { CATALOG_TAG, CATALOG_JSON, parseCatalog, fromReleases, daysView } from '../../docs/lib/catalog.mjs';
 
 const enc = new TextEncoder();
 const FAIL_MAX = 5;
@@ -17,10 +18,11 @@ export class HttpError extends Error {
 }
 
 // ---- bộ nhớ đệm trong isolate (đủ cho cache 30–60 giây) ----
-const cache = { status: null, hosts: null };
+const cache = { status: null, hosts: null, catalog: null };
 export function _resetCaches() {
   cache.status = null;
   cache.hosts = null;
+  cache.catalog = null;
 }
 
 // ---- tiện ích ----
@@ -214,7 +216,9 @@ async function addItems(env, request) {
   if (!cands.length) return { results, added: 0, ...countOf({ items: [] }) };
 
   const out = await mutateQueue(env, `Thêm ${cands.length} mục vào hàng đợi`, (queue) => {
-    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, i.options)));
+    // chuẩn hoá tuỳ chọn của mục cũ (thiếu khoá mới như phone) để so khớp đúng với mục mới
+    const norm = (o) => { const v = validateOptions(o); return v.ok ? v.value : o; };
+    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, norm(i.options))));
     const res = [];
     let added = 0;
     for (const c of cands) {
@@ -256,6 +260,46 @@ async function patchItem(env, request, id) {
   });
 }
 
+// Sửa nhiều mục trong MỘT lần ghi (một commit). Mục lỗi được báo riêng, các mục còn lại vẫn được áp.
+async function patchBatch(env, request) {
+  const body = await readBody(request);
+  if (!Array.isArray(body.changes) || body.changes.length < 1) throw new HttpError(400, 'bad_request', 'Cần gửi mảng changes (ít nhất 1 mục).');
+  if (body.changes.length > LIMITS.maxChanges) throw new HttpError(400, 'too_many_items', `Tối đa ${LIMITS.maxChanges} mục mỗi lần lưu.`);
+  const out = await mutateQueue(env, `Sửa ${body.changes.length} mục trong hàng đợi`, (queue) => {
+    const results = [];
+    let updated = 0;
+    for (const [index, ch] of body.changes.entries()) {
+      const id = ch && typeof ch === 'object' ? ch.id : undefined;
+      const no = (reason, message) => results.push({ index, id: typeof id === 'string' ? id.slice(0, 40) : null, ok: false, reason, message });
+      if (!ch || typeof ch !== 'object' || Array.isArray(ch)) { no('bad_item', 'Mục không hợp lệ.'); continue; }
+      if (typeof id !== 'string' || !ID_RE.test(id)) { no('bad_id', 'id không hợp lệ.'); continue; }
+      if (!('options' in ch) && !('label' in ch)) { no('bad_request', 'Cần gửi options hoặc label.'); continue; }
+      const it = queue.items.find((i) => i && i.id === id);
+      if (!it) { no('not_found', 'Không tìm thấy mục (có thể đã xong hoặc đã bị xóa).'); continue; }
+      if (!['pending', 'failed'].includes(it.status)) { no('item_busy', 'Mục không ở trạng thái sửa được.'); continue; }
+      let options = it.options;
+      let label = it.label;
+      if ('options' in ch) {
+        if (!ch.options || typeof ch.options !== 'object' || Array.isArray(ch.options)) { no('bad_options', 'Tuỳ chọn không hợp lệ.'); continue; }
+        const o = validateOptions({ ...it.options, ...ch.options });
+        if (!o.ok) { no('bad_options', o.message); continue; }
+        options = o.value;
+      }
+      if ('label' in ch) {
+        const l = validateLabel(ch.label);
+        if (!l.ok) { no('bad_label', l.message); continue; }
+        label = l.value;
+      }
+      it.options = options;
+      it.label = label;
+      results.push({ index, id, ok: true });
+      updated++;
+    }
+    return { changed: updated > 0, out: { results, updated, counts: countOf(queue) } };
+  });
+  return out;
+}
+
 const deleteItem = (env, id) =>
   mutateQueue(env, `Xóa mục ${id}`, (queue) => {
     const n = queue.items.length;
@@ -288,20 +332,56 @@ async function runWorkflow(env, request) {
   throw ghFail(res, 'kích hoạt workflow');
 }
 
+const CATALOG_DAYS = 14;
+// Đọc catalog.json từ release mục lục (qua browser_download_url, repo public). null nếu chưa có hoặc hỏng.
+async function readCatalog(env) {
+  const rel = await ghRequest(env, 'GET', `${repoPath(env)}/releases/tags/${CATALOG_TAG}`);
+  if (rel.status === 404) return { entries: null, url: null };
+  if (rel.status !== 200) throw ghFail(rel, 'đọc release mục lục');
+  const url = rel.data.html_url || null;
+  const asset = (rel.data.assets || []).find((a) => a.name === CATALOG_JSON && a.state === 'uploaded');
+  if (!asset || typeof asset.browser_download_url !== 'string' || !asset.browser_download_url.startsWith('https://github.com/')) return { entries: null, url };
+  try {
+    const res = await fetch(asset.browser_download_url, { headers: { 'User-Agent': 'video-compress-gateway' }, redirect: 'follow' });
+    if (!res.ok) return { entries: null, url };
+    return { entries: parseCatalog(await res.text()), url };
+  } catch {
+    return { entries: null, url };
+  }
+}
+// Phương án dự phòng: liệt kê các release `vid-` (cả tag ngày lẫn tag cũ), tối đa 5 trang × 100.
+async function listVideoReleases(env) {
+  const all = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await ghRequest(env, 'GET', `${repoPath(env)}/releases?per_page=100&page=${page}`);
+    if (r.status !== 200) throw ghFail(r, 'đọc release');
+    const arr = Array.isArray(r.data) ? r.data : [];
+    all.push(...arr);
+    if (arr.length < 100) break;
+  }
+  return all.filter((r) => typeof r.tag_name === 'string' && r.tag_name.startsWith('vid-') && !r.draft);
+}
+
 async function status(env) {
   if (cache.status && Date.now() - cache.status.at < 30000) return cache.status.data;
-  const [runs, rels] = await Promise.all([
-    ghRequest(env, 'GET', `${repoPath(env)}/actions/workflows/${encodeURIComponent(env.WORKFLOW_FILE)}/runs?per_page=5&branch=${encodeURIComponent(env.GH_BRANCH)}`),
-    ghRequest(env, 'GET', `${repoPath(env)}/releases?per_page=30`),
-  ]);
+  const repo = `${env.GH_OWNER}/${env.GH_REPO}`;
+  const tz = env.TIMEZONE || 'Asia/Ho_Chi_Minh';
+  const runsP = ghRequest(env, 'GET', `${repoPath(env)}/actions/workflows/${encodeURIComponent(env.WORKFLOW_FILE)}/runs?per_page=5&branch=${encodeURIComponent(env.GH_BRANCH)}`);
+  const catP = readCatalog(env).catch((e) => ({ entries: null, url: null, error: e }));
+  const [runs, cat] = await Promise.all([runsP, catP]);
   if (runs.status !== 200) throw ghFail(runs, 'đọc các lần chạy');
-  if (rels.status !== 200) throw ghFail(rels, 'đọc release');
+  let entries = cat.entries;
+  let source = 'catalog';
+  if (!entries) {
+    // chưa có catalog hoặc đọc lỗi → dựng tạm từ danh sách release
+    source = 'releases';
+    entries = fromReleases(await listVideoReleases(env), { repo, tz });
+  }
   const data = {
     runs: (runs.data.workflow_runs || []).map((r) => ({ id: r.id, number: r.run_number, status: r.status, conclusion: r.conclusion, event: r.event, created_at: r.created_at, url: r.html_url })),
-    releases: (rels.data || []).filter((r) => typeof r.tag_name === 'string' && r.tag_name.startsWith('vid-') && !r.draft).slice(0, 15).map((r) => ({
-      tag: r.tag_name, name: r.name, url: r.html_url, published_at: r.published_at,
-      assets: (r.assets || []).map((a) => ({ name: a.name, size: a.size, url: a.browser_download_url })),
-    })),
+    days: daysView(entries, { repo, limitDays: CATALOG_DAYS }),
+    catalog_url: cat.url || `https://github.com/${repo}/releases/tag/${CATALOG_TAG}`,
+    source,
   };
   cache.status = { at: Date.now(), data };
   return data;
@@ -323,6 +403,10 @@ async function route(request, env, url) {
   }
   if (p === '/api/config' && m === 'GET') return { allowed_hosts: await getAllowedHosts(env), limits: { max_batch: LIMITS.maxBatch, max_queue: LIMITS.maxQueue } };
   if (p === '/api/queue/add' && m === 'POST') return addItems(env, request);
+  if (p === '/api/queue/batch') {
+    if (m === 'PATCH') return patchBatch(env, request);
+    throw new HttpError(405, 'method_not_allowed', 'Phương thức không được hỗ trợ.');
+  }
   if (p === '/api/run' && m === 'POST') return runWorkflow(env, request);
   if (p === '/api/status' && m === 'GET') return status(env);
   let id = itemId(/^\/api\/queue\/item\/([^/]+)$/);

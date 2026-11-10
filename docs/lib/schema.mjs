@@ -1,7 +1,7 @@
 // Validate hàng đợi và tuỳ chọn. Dùng chung trình duyệt, Worker và Node.
 import { PROVIDER_IDS, validateRef } from './providers.mjs';
 
-export const LIMITS = { maxQueue: 200, maxBatch: 50, maxBody: 65536, maxQueueBytes: 1048576, labelMax: 80, maxAttempts: 99 };
+export const LIMITS = { maxQueue: 200, maxBatch: 50, maxChanges: 200, maxBody: 65536, maxQueueBytes: 1048576, labelMax: 80, maxAttempts: 99 };
 
 // [giá trị, nhãn tiếng Việt]. Khoá phải khớp config/profiles.json (có test kiểm tra).
 export const OPTION_CHOICES = {
@@ -11,13 +11,14 @@ export const OPTION_CHOICES = {
   fps_cap: [[null, 'Không giới hạn'], [30, 'Tối đa 30 fps'], [60, 'Tối đa 60 fps']],
   audio: [['copy', 'Giữ nguyên âm thanh'], ['opus_96', 'Opus 96 kbps'], ['opus_128', 'Opus 128 kbps'], ['aac_128', 'AAC 128 kbps']],
   container: [['mkv', 'MKV'], ['mp4', 'MP4']],
+  phone: [[true, 'Bật'], [false, 'Tắt']],
 };
-export const OPTION_LABELS = { resolution: 'Độ phân giải', quality: 'Chất lượng', codec: 'Codec', fps_cap: 'Khung hình', audio: 'Âm thanh', container: 'Định dạng', min_vmaf: 'VMAF tối thiểu' };
+export const OPTION_LABELS = { resolution: 'Độ phân giải', quality: 'Chất lượng', codec: 'Codec', fps_cap: 'Khung hình', audio: 'Âm thanh', container: 'Định dạng', phone: 'Bản điện thoại (H.264)', min_vmaf: 'VMAF tối thiểu' };
 export const VMAF_RANGE = [85, 99];
 export const STATUSES = ['pending', 'failed'];
 
 export function defaultOptions() {
-  return { resolution: 'fhd', quality: 'balanced', codec: 'av1', fps_cap: null, audio: 'opus_128', container: 'mkv', min_vmaf: null };
+  return { resolution: 'original', quality: 'strong', codec: 'hevc', fps_cap: null, audio: 'opus_128', container: 'mkv', phone: true, min_vmaf: null };
 }
 
 const fail = (message) => ({ ok: false, message });
@@ -27,6 +28,7 @@ export function validateOptions(input) {
   if (input === undefined || input === null) return { ok: true, value: base };
   if (typeof input !== 'object' || Array.isArray(input)) return fail('Tuỳ chọn không hợp lệ.');
   for (const k of Object.keys(input)) if (!(k in base)) return fail(`Tuỳ chọn lạ: ${k}`);
+  // Mục cũ trong queue.json đã có đủ khoá tường minh nên đổi mặc định không làm đổi chúng; chỉ khoá mới (phone) thiếu thì nhận mặc định.
   const o = { ...base, ...input };
   for (const k of Object.keys(OPTION_CHOICES)) {
     if (!OPTION_CHOICES[k].some(([v]) => v === o[k])) return fail(`Giá trị không hợp lệ cho "${OPTION_LABELS[k]}".`);

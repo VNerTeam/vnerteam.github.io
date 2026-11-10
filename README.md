@@ -2,7 +2,17 @@
 
 Bộ công cụ xử lý media mã nguồn mở **dùng cá nhân của chủ repo**. Không phải dịch vụ cho người khác.
 
-Luồng: dán link vào trang web (GitHub Pages) → trang nhận diện storage → chọn tuỳ chọn → "Lưu vào hàng đợi" → **Cloudflare Worker** (xác thực password) ghi `queue.json` → GitHub Actions nén bằng **ab-av1** (tìm CRF nhỏ nhất đạt VMAF mục tiêu) trên ffmpeg tĩnh → up lên **GitHub Release** → xác nhận file đã lên → mới xóa mục khỏi hàng đợi.
+Luồng: dán link vào trang web (GitHub Pages) → trang nhận diện storage → chọn tuỳ chọn → "Lưu vào hàng đợi" (**chỉ lưu, chưa chạy**) → **Cloudflare Worker** (xác thực password) ghi `queue.json` → bấm **"Chạy ngay"** → GitHub Actions nén bằng **ab-av1** (tìm CRF nhỏ nhất đạt VMAF mục tiêu) trên ffmpeg tĩnh → (tuỳ chọn) làm thêm bản **H.264 cho điện thoại** → up lên **GitHub Release theo ngày** → xác nhận từng file đã lên → mới xóa mục khỏi hàng đợi và cập nhật **release mục lục**.
+
+## Khi nào workflow chạy
+
+Workflow `compress.yml` **không có trigger `push`**. Lưu hoặc sửa hàng đợi (Worker ghi `queue.json`) **không** làm workflow tự chạy. Nó chỉ chạy khi:
+
+1. bấm **"Chạy ngay"** trên trang (Worker gọi `workflow_dispatch`), hoặc
+2. bấm **Run workflow** trong tab Actions, hoặc
+3. job `finalize` tự gọi lại chính nó để làm tiếp phần còn lại của hàng đợi (có giới hạn `max_chain` và hạn mức ngày).
+
+Nếu đang có lần chạy `queued`/`in_progress`, trang sẽ hỏi lại trước khi gửi lệnh (workflow có `concurrency` nên các lần chạy không bao giờ chồng nhau).
 
 ## Cảnh báo quan trọng (đọc trước khi dùng)
 
@@ -14,8 +24,8 @@ Luồng: dán link vào trang web (GitHub Pages) → trang nhận diện storage
 
 - Không thêm collaborator nào. Người ngoài xem được repo/trang/release nhưng không thêm hay kích hoạt được gì.
 - Bật Settings → Actions → General → **Require approval for all outside collaborators**.
-- Workflow không chạy theo `pull_request`, `pull_request_target`, `issues`, `fork`. Job `plan` chỉ chạy khi `github.actor` là chủ repo hoặc `github-actions[bot]` (vòng tự gọi lại). **Repo thuộc tổ chức**: `github.repository_owner` là tên tổ chức nên điều kiện `if` ở job `plan` sẽ chặn; hãy thay bằng tên tài khoản của bạn.
-- Nhánh mặc định không phải `main`: sửa `branches: [main]` trong `.github/workflows/compress.yml` và `GH_BRANCH` của Worker.
+- Workflow không chạy theo `pull_request`, `pull_request_target`, `issues`, `fork`. Job `plan` chỉ chạy với `workflow_dispatch` khi `github.actor` là chủ repo (PAT của Worker, hoặc bấm tay) hoặc `github-actions[bot]` (vòng tự gọi lại). **Repo thuộc tổ chức**: `github.repository_owner` là tên tổ chức nên điều kiện `if` ở job `plan` sẽ chặn; hãy thay bằng tên tài khoản của bạn.
+- Nhánh mặc định không phải `main`: sửa `GH_BRANCH` của Worker (và `branches: [main]` trong `pages.yml`). `compress.yml` không còn phụ thuộc tên nhánh: job `plan` chỉ chạy trên nhánh mặc định.
 
 ## Cài đặt
 
@@ -25,7 +35,7 @@ Luồng: dán link vào trang web (GitHub Pages) → trang nhận diện storage
 4. Tạo **fine-grained PAT** chỉ cho repo này: Contents *Read and write*, Actions *Read and write*, Metadata *Read*.
 5. Triển khai Worker theo `worker/README.md`, rồi điền địa chỉ Worker vào `docs/config.js`.
 6. Nếu Worker dùng tên miền riêng, sửa `connect-src` trong thẻ CSP của `docs/index.html` thành đúng địa chỉ Worker.
-7. Mở trang Pages, nhập password, dán thử một link nhỏ, bấm "Lưu vào hàng đợi".
+7. Mở trang Pages, nhập password (rồi đặt PIN), dán thử một link nhỏ, bấm "Lưu vào hàng đợi", sau đó bấm **"Chạy ngay"**.
 8. Chạy thử không nén: Actions → "Nén video theo hàng đợi" → Run workflow → `mode = dry_run`.
 
 Kiểm thử: `node --test "tests/*.test.mjs" "worker/test/*.test.mjs"` (Node ≥ 20, không cần `npm install`).
@@ -71,17 +81,63 @@ Bật cho từng trang trong `config/allowed-hosts.json` bằng cờ `"ytdlp": t
 ```
 `*.suffix` chỉ khớp tên miền con. Worker đọc file này từ repo (cache 60 giây), không cần triển khai lại.
 
+## Đầu ra: bản thường + bản điện thoại
+
+Mỗi video cho tối đa **hai file** trong cùng một release:
+
+| File | Tên | Nội dung |
+|---|---|---|
+| Bản thường | `{slug}-{hash6}-{codec}.{ext}` (vd `phim-a1b2c3-hevc.mkv`) | HEVC/AV1 10-bit theo tuỳ chọn, giữ HDR |
+| Bản điện thoại | `{slug}-{hash6}-phone.mp4` | H.264 8-bit `yuv420p`, AAC stereo, `faststart`: có thumbnail và phát mượt trên điện thoại |
+
+`hash6` là 6 ký tự cuối của id mục, nên hai video cùng tên không bao giờ ghi đè nhau.
+
+**Bản điện thoại làm từ chính bản thường** (không làm từ file nguồn), theo thông số của `video_to_fhd.bat`: `libx264 -preset medium -crf 25 -maxrate/-bufsize`, `aac 128k`, `-movflags +faststart`, chỉ lấy 1 video + 1 audio đầu, thêm `-ac 2`. Giữ độ phân giải bạn chọn nhưng **cạnh dài tối đa 1920** (bản thường 2K/4K thì bản điện thoại về FHD; bản thường 720p thì vẫn 720p; không bao giờ phóng to). Mức bitrate chọn theo cạnh dài của khung hình đầu ra: ≤ 1280 → 2500k, còn lại → 4500k (`bufsize` = `maxrate` × 2).
+
+- **Nguồn HDR**: chỉ bản điện thoại được tone-map về SDR (`zscale` + `tonemap=hable`) và gắn thẻ bt709. Bản thường vẫn giữ HDR. Nếu ffmpeg thiếu `zscale`/`tonemap` thì bỏ tone-map và ghi chú "màu có thể nhạt" (`setup-tools.sh` cũng cảnh báo).
+- **Kiểm tra** bằng ffprobe: luồng `h264`, `yuv420p`, thời lượng lệch ≤ 1% so với nguồn (clip rất ngắn được thêm sàn 0,25 giây vì phần đệm của AAC), số audio khớp.
+- **Lỗi bản điện thoại không làm hỏng mục**: nếu bước này lỗi, hết ngân sách thời gian, hoặc file ≥ 2 GiB thì bỏ bản điện thoại, ghi lý do vào `phone_skipped` (hiện trong release và trên trang), **vẫn đăng bản thường**.
+- Tắt được từng mục bằng tuỳ chọn **"Bản điện thoại (H.264)"** (mặc định bật).
+
+Mặc định tuỳ chọn mới: `resolution original, quality strong, codec hevc, audio opus_128, container mkv, phone bật`. Các mục đã nằm trong hàng đợi giữ nguyên tuỳ chọn của chúng (mục cũ chưa có khoá `phone` nhận giá trị bật).
+
+### Cấu trúc `profiles.json` mục `phone`
+
+```json
+"phone": { "preset": "medium", "crf": 25, "audio_kbps": 128,
+  "caps": [ { "max_long_edge": 1280, "maxrate": "2500k" }, { "max_long_edge": 1920, "maxrate": "4500k" } ],
+  "bufsize_factor": 2, "max_long_edge": 1920 }
+```
+
+## Release theo ngày và release mục lục
+
+GitHub giới hạn **1000 file đính kèm mỗi release** và 2 GiB mỗi file (không giới hạn tổng dung lượng, và không có giới hạn số release), nên các video được gom theo ngày thay vì mỗi video một release.
+
+- **Release ngày** `vid-YYYYMMDD` (ngày theo `settings.timezone`), tiêu đề `📅 YYYY-MM-DD · N video`. Các job nén chạy song song và **chỉ upload asset** vào đó; release được tạo theo kiểu chịu được race. Body là bảng của ngày đó kèm khối `<details>` kỹ thuật cho từng video (dung lượng, độ phân giải, codec, CRF, VMAF, thời gian nén, phiên bản công cụ, SHA256, ghi chú…).
+- **Khi lỗi chỉ xoá asset của mục đó**, không bao giờ xoá release ngày. Chống làm lại: nếu release hôm nay/hôm qua đã có bản thường của mục (tên chứa `-hash6-`, trạng thái `uploaded`, size > 0) thì coi là xong. Mỗi asset được xác nhận lại qua API (`state`, `size`, `digest` nếu có).
+- **Release mục lục** `muc-luc` (`📚 Mục lục video`): chỉ job `finalize` (chạy tuần tự) được ghi. Gồm `catalog.json` (mảng đầy đủ, upsert theo `id`, mới → cũ), `muc-luc.md` (bảng đầy đủ) và phần mô tả là bảng nhóm theo ngày, ngày mới ở trên, dừng ở ~110.000 ký tự (giới hạn của GitHub ~125.000) rồi trỏ tới `muc-luc.md` / `catalog.json`. Link tải dạng `https://github.com/<repo>/releases/download/<tag>/<tên>`.
+- Nếu `catalog.json` chưa có hoặc hỏng, `finalize` tự dựng lại từ các release ngày (thiếu một phần siêu dữ liệu). Nếu cập nhật mục lục lỗi, `queue.json` vẫn được cập nhật bình thường; chỉ có cảnh báo trong summary và lần chạy sau tự đồng bộ lại (đối chiếu release hôm nay/hôm qua).
+- **Hạn mức ngày** `max_items_per_day` đếm **số video** đã đăng hôm nay (số asset bản thường trong release ngày, không tính `-phone.mp4` và file mục lục; cộng thêm release dạng cũ cùng ngày nếu có).
+- Release cũ dạng `vid-YYYYMMDD-HHMMSS-hash` **để nguyên**, không migrate; chúng không nằm trong mục lục, xem ở trang Releases của repo.
+
+## Khoá bằng PIN (bảo mật phía trình duyệt)
+
+- **Password** nhập một lần trên mỗi thiết bị (có tick "Ghi nhớ"). Trang không còn lưu password dạng thô: nó được mã hoá bằng **PIN 4–6 chữ số** (PBKDF2-SHA256 ≥ 600.000 vòng, salt ngẫu nhiên → AES-GCM) và lưu ở `localStorage` khoá `vc_vault`.
+- **PIN** phải nhập mỗi lần vào trang (kể cả F5/mở lại tab). Sai 5 lần thì két bị xoá và phải nhập lại password. "Quên PIN / đăng nhập bằng password" xoá két rồi đặt PIN mới. Nút **Khoá** xoá password khỏi bộ nhớ và về màn hình PIN; **Đăng xuất** xoá két. Worker trả 401 (đổi password) thì két bị xoá. Khoá `vc_password` của bản cũ được dùng để đăng nhập một lần, ép đặt PIN rồi bị xoá.
+- **Giới hạn cần biết:** đây là khoá phía trình duyệt, **không thay** password của Worker và **không phải** lớp xác thực thứ hai ở server. Ai chép được `localStorage` của bạn có thể dò PIN ngoại tuyến (PBKDF2 chỉ làm chậm), nên khuyên dùng PIN **6 chữ số**. Worker không đổi cho phần này.
+- Tuỳ chọn "Tuỳ chọn cho mục mới" được nhớ theo từng thiết bị (`localStorage` khoá `vc_defaults`, không đồng bộ giữa các máy).
+
 ## Tuỳ chỉnh
 
 - `config/settings.json`: `max_parallel` (mặc định 2, tối đa 20), `max_items_per_run`, `max_items_per_day`, `time_budget_min` (240–300), `reserve_min`, `max_input_gb`, `min_vmaf_floor`, `free_disk_space`, `timezone`, `max_attempts`, `max_chain`, `runner_label`.
-- `config/profiles.json`: chiều cao từng mức độ phân giải, VMAF + preset từng mức chất lượng, ladder tốc độ, bitrate âm thanh. Tên khoá phải khớp menu trong `docs/lib/schema.mjs` (có test kiểm tra).
+- `config/profiles.json`: chiều cao (**cạnh ngắn**) từng mức độ phân giải, VMAF + preset từng mức chất lượng, ladder tốc độ, bitrate âm thanh, và mục `phone` (xem trên). Tên khoá phải khớp menu trong `docs/lib/schema.mjs` (có test kiểm tra).
 - `config/tools.json`: ghim phiên bản ffmpeg (BtbN), ab-av1, gdown; có trường `sha256` tuỳ chọn (điền kết quả `sha256sum` để kiểm tra toàn vẹn).
 
 ### Cập nhật ffmpeg đã ghim
 BtbN giữ bản cuối mỗi tháng trong 2 năm và 14 bản daily gần nhất. Chọn bản cuối tháng của nhánh phát hành ổn định bằng `gh release list --repo BtbN/FFmpeg-Builds`, rồi sửa `tag` và `asset` trong `config/tools.json`. Nếu tag bị xóa, workflow cảnh báo rõ và dùng tag `latest` của cùng nhánh.
 
 ### Đổi sang self-hosted runner
-Đặt `"runner_label": "self-hosted"` (hoặc một mảng nhãn). Chỉ dùng trigger `push` (nhánh mặc định) và `workflow_dispatch`; **không bao giờ** thêm `pull_request`. Bật "Require approval for all outside collaborators". Máy cần có `gh`, `curl`, `node` ≥ 20, `python3/pip`, `tar`, `zstd`; ổ đĩa tồn tại lâu nên script tự dọn `item-*` cũ khi bắt đầu job.
+Đặt `"runner_label": "self-hosted"` (hoặc một mảng nhãn). Chỉ dùng `workflow_dispatch`; **không bao giờ** thêm `pull_request`. Bật "Require approval for all outside collaborators". Máy cần có `gh`, `curl`, `node` ≥ 20, `python3/pip`, `tar`, `zstd`; ổ đĩa tồn tại lâu nên script tự dọn `item-*` cũ khi bắt đầu job.
 
 ## Bảng lỗi (`last_error`)
 
@@ -101,7 +157,8 @@ BtbN giữ bản cuối mỗi tháng trong 2 năm và 14 bản daily gần nhấ
 | `verify_failed` | Kết quả lệch thời lượng/luồng | Xem log |
 | `no_gain` | Nén xong không nhỏ hơn gốc | Không đăng; bỏ mục hoặc đổi tuỳ chọn |
 | `too_big` | Vẫn ≥ 2 GiB sau khi hạ VMAF tới sàn | Hạ độ phân giải |
-| `upload_failed`, `release_failed` | Release không xác nhận được | Thử lại |
+| `upload_failed`, `release_failed`, `gh_error` | Release không tạo/xác nhận/đọc được | Thử lại |
+| `phone_skipped` (không phải lỗi) | Bản điện thoại bị bỏ (lỗi ffmpeg, hết thời gian, ≥ 2 GiB, không qua kiểm tra); bản thường vẫn đăng. Lý do ghi trong release và trên trang | Xem log; không cần làm gì nếu chấp nhận thiếu bản điện thoại |
 | `onedrive_unsupported`, `pcloud_*`, `link_deleted`, `link_expired` | Link storage hỏng/hết hạn | Tạo link mới |
 | `no_result`, `cancelled` | Job bị dừng giữa chừng | Mục giữ nguyên, tự chạy lại tới `max_attempts` |
 | `invalid_schema…` | Mục sai định dạng | Xóa và thêm lại |
@@ -117,7 +174,9 @@ Mục `failed` **không tự chạy lại**; bấm "Thử lại" trên trang ho�
 - Trang nhận danh sách `allowed_hosts` qua `GET /api/config` của Worker.
 - Mục `timeout`/lỗi thông thường chuyển sang `failed`; chỉ `no_result` và `cancelled` giữ `pending` (tăng `attempts`, thành `failed` khi chạm `max_attempts`).
 - `id` và `added_at` dùng giờ UTC; tag release và ngày trong tiêu đề dùng `settings.timezone`.
-- Release được tạo ở dạng **draft**, upload và xác nhận xong mới công khai (không có release dở dang); nếu có `digest` SHA256 trên API thì đối chiếu thêm.
+- Release ngày là release công khai, không phải draft; từng asset được upload rồi xác nhận (`state`, `size`, `digest` SHA256 nếu API có) trước khi tính là xong.
+- Bản thường được upload **trước**, bản điện thoại làm và upload sau; nếu job bị dừng giữa chừng sau khi bản thường đã lên, lần chạy lại coi mục là xong (chỉ thiếu bản điện thoại).
+- Bản điện thoại chỉ được bắt đầu khi ngân sách thời gian còn ≥ max(1 phút, 30% thời lượng video) (ước lượng của mình, chưa đo trên runner thật).
 - Vòng tự gọi lại bị chặn bởi hạn mức ngày và `max_chain` (mặc định 30).
-- Đầu ra video luôn là 10-bit 4:2:0 (nguồn 4:2:2/4:4:4 bị đổi về 4:2:0, có ghi chú trong release); chỉ lấy luồng video chính đầu tiên.
+- Bản thường luôn là 10-bit 4:2:0 (nguồn 4:2:2/4:4:4 bị đổi về 4:2:0, có ghi chú trong release); chỉ lấy luồng video chính đầu tiên. Quy ước độ phân giải là **cạnh ngắn** (video dọc 1080×1920 được coi là 1080p, không bị thu nhỏ).
 - Giai đoạn 2 (chưa làm, đã chừa chỗ): chia video thành đoạn nén song song, hàng đợi riêng tư bằng repository variable (`QUEUE_BACKEND`), MEGA/Wistia (yt-dlp có thể xử lý HLS/streaming ở những trang bạn bật), thông báo khi xong.

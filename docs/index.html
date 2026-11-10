@@ -44,6 +44,11 @@ details summary{cursor:pointer;color:var(--accent);margin-top:6px}
 #savebar .in{max-width:860px;margin:0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between}
 a{color:var(--accent)}
 .sr{position:absolute;left:-9999px}
+.item.dirty{border-left-color:var(--warn)}
+.vid{border-top:1px solid var(--line);margin-top:8px;padding-top:6px}
+.filerow .tag{min-width:6.5em}.filerow a{word-break:break-all}
+.pin{letter-spacing:.4em;text-align:center;font-size:1.4rem;width:100%;margin:6px 0 10px}
+[hidden]{display:none!important}
 @media (prefers-reduced-motion:no-preference){.item{transition:border-color .2s}}
 </style>
 </head>
@@ -54,9 +59,33 @@ a{color:var(--accent)}
   <section>
     <label for="pw" class="muted">Password</label>
     <input id="pw" type="password" autocomplete="current-password" style="width:100%;margin:6px 0 10px">
-    <label class="row muted"><input id="remember" type="checkbox" checked> Ghi nhớ trên thiết bị này</label>
-    <div class="row" style="margin-top:12px"><button id="login" class="primary">Mở khóa</button></div>
+    <label class="row muted"><input id="remember" type="checkbox" checked> Ghi nhớ trên thiết bị này (bảo vệ bằng PIN)</label>
+    <div class="row" style="margin-top:12px"><button id="login" class="primary">Đăng nhập</button></div>
     <p id="lockmsg" class="msg" role="alert"></p>
+  </section>
+</main>
+
+<main id="pinlock" hidden>
+  <h1>Nén video</h1>
+  <p class="muted">Nhập PIN để mở khoá trên thiết bị này.</p>
+  <section>
+    <label for="pin" class="muted">PIN (4–6 chữ số)</label>
+    <input id="pin" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]*">
+    <div class="row"><button id="unlock" class="primary">Mở khoá</button><button id="forgot">Quên PIN / đăng nhập bằng password</button></div>
+    <p id="pinmsg" class="msg" role="alert"></p>
+  </section>
+</main>
+
+<main id="pinset" hidden>
+  <h1>Đặt PIN</h1>
+  <p class="muted">PIN mã hoá password đã nhớ trên máy này và phải nhập mỗi lần vào trang. Nên dùng 6 chữ số.</p>
+  <section>
+    <label for="pin1" class="muted">PIN mới (4–6 chữ số)</label>
+    <input id="pin1" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]*">
+    <label for="pin2" class="muted">Nhập lại PIN</label>
+    <input id="pin2" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]*">
+    <div class="row"><button id="savepin" class="primary">Lưu PIN</button><button id="cancelpin">Quay lại</button></div>
+    <p id="pinsetmsg" class="msg" role="alert"></p>
   </section>
 </main>
 
@@ -64,9 +93,9 @@ a{color:var(--accent)}
   <header>
     <div>
       <h1>Nén video</h1>
-      <p>Dán link, chọn mức nén, lưu vào hàng đợi. GitHub Actions sẽ nén và đưa kết quả lên Release.</p>
+      <p>Dán link, chọn mức nén, lưu vào hàng đợi, rồi bấm <strong>Chạy ngay</strong>. Lưu chỉ lưu, không tự chạy. GitHub Actions sẽ nén và đưa kết quả lên Release.</p>
     </div>
-    <button id="logout">Đăng xuất</button>
+    <div class="row"><button id="lockbtn" hidden>Khoá</button><button id="logout">Đăng xuất</button></div>
   </header>
 
   <section>
@@ -74,14 +103,14 @@ a{color:var(--accent)}
     <label for="links" class="sr">Link video, mỗi dòng một link</label>
     <textarea id="links" placeholder="Mỗi dòng một link (Google Drive, Dropbox, pCloud, GitHub, Hugging Face, Internet Archive…)" spellcheck="false"></textarea>
     <div id="preview"></div>
-    <details id="defaults"><summary>Tuỳ chọn cho mục mới</summary><div id="defopts"></div>
+    <details id="defaults"><summary>Tuỳ chọn cho mục mới (được nhớ trên thiết bị này)</summary><div id="defopts"></div>
       <div class="row" style="margin-top:8px"><button id="applyall">Áp dụng cho tất cả nháp</button></div></details>
     <div class="row" style="margin-top:10px"><button id="adddraft" class="primary">Thêm vào nháp</button></div>
   </section>
 
   <section>
     <h2>Nháp <span id="draftcount" class="muted"></span></h2>
-    <p class="muted" style="margin-top:0">Nháp chỉ nằm trong trình duyệt này. Bấm "Lưu vào hàng đợi" mới gửi đi.</p>
+    <p class="muted" style="margin-top:0">Nháp chỉ nằm trong trình duyệt này. "Lưu vào hàng đợi" chỉ lưu, chưa chạy; muốn chạy hãy bấm "Chạy ngay" ở mục Hàng đợi.</p>
     <div id="drafts"></div>
     <div id="saveresult"></div>
   </section>
@@ -89,6 +118,12 @@ a{color:var(--accent)}
   <section>
     <div class="row"><h2 class="grow">Hàng đợi</h2><button id="refresh">Làm mới</button><button id="runnow" class="primary">Chạy ngay</button></div>
     <p id="qsummary" class="muted"></p>
+    <div class="row">
+      <button id="saveall" class="primary" disabled>Lưu tất cả thay đổi</button>
+      <button id="discard" hidden>Bỏ thay đổi</button>
+      <button id="applyq" disabled>Áp dụng tuỳ chọn mặc định cho cả hàng chờ</button>
+    </div>
+    <p class="muted">Sửa tuỳ chọn nhiều mục rồi lưu một lần. Chưa lưu thì không có gì thay đổi trên GitHub.</p>
     <div id="queue"></div>
     <p id="qmsg" class="msg" role="status"></p>
   </section>
@@ -96,7 +131,7 @@ a{color:var(--accent)}
   <section>
     <div class="row"><h2 class="grow">Trạng thái</h2><button id="refstatus">Làm mới</button></div>
     <div id="runs"></div>
-    <h2 style="margin-top:16px">Video đã nén</h2>
+    <div class="row" style="margin-top:16px"><h2 class="grow">Video đã nén</h2><a id="catlink" href="#" target="_blank" rel="noopener" hidden>Mở mục lục</a></div>
     <div id="releases"></div>
   </section>
 </main>

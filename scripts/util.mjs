@@ -4,6 +4,8 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { parseQueue, serializeQueue } from '../docs/lib/schema.mjs';
+import { fmtBytes, fmtDur } from '../docs/lib/format.mjs';
+import { dayTagOf, countMainAssets, LEGACY_TAG_RE } from '../docs/lib/catalog.mjs';
 
 const execFileP = promisify(execFile);
 
@@ -118,23 +120,7 @@ export function summary(md) {
 }
 
 // ---- định dạng ----
-export function fmtBytes(n) {
-  if (!Number.isFinite(n)) return '?';
-  const u = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  let i = 0;
-  while (n >= 1024 && i < u.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return `${n.toFixed(i ? 2 : 0)} ${u[i]}`;
-}
-export function fmtDur(sec) {
-  sec = Math.round(sec);
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  return h ? `${h}g ${m}p ${s}s` : m ? `${m}p ${s}s` : `${s}s`;
-}
+export { fmtBytes, fmtDur };
 export function slugify(s, max = 60, keepCase = false) {
   let t = String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
   if (!keepCase) t = t.toLowerCase();
@@ -164,12 +150,33 @@ export function freeBytes(dir) {
   return Number(s.bavail) * Number(s.bsize);
 }
 
-// Số release video đã tạo trong ngày hôm nay (theo múi giờ cấu hình), dựa trên tag vid-YYYYMMDD-*
-export async function countTodayReleases(repo, tz) {
-  const r = await gh(['release', 'list', '--repo', repo, '--limit', '200', '--json', 'tagName']);
-  if (r.code !== 0) throw new Error(`Không đọc được danh sách release: ${r.stderr.slice(0, 200)}`);
-  const prefix = `vid-${todayStr(tz)}-`;
-  return JSON.parse(r.stdout || '[]').filter((x) => x.tagName.startsWith(prefix)).length;
+// Đọc 1 release theo tag. Trả về object release, hoặc null nếu chưa có (404). Lỗi khác thì ném lỗi.
+export async function getReleaseByTag(repo, tag, ghFn = gh) {
+  const r = await ghFn(['api', `repos/${repo}/releases/tags/${tag}`]);
+  if (r.code === 0) {
+    try {
+      return JSON.parse(r.stdout);
+    } catch {
+      throw new Error(`Release ${tag} trả về không phải JSON.`);
+    }
+  }
+  if (/404|not found/i.test(`${r.stderr} ${r.stdout}`)) return null;
+  throw new Error(`Không đọc được release ${tag}: ${String(r.stderr).slice(0, 200)}`);
+}
+
+// Số VIDEO đã đăng hôm nay (theo múi giờ cấu hình) = số asset bản thường đã upload trong release ngày `vid-YYYYMMDD`
+// (không tính -phone.mp4, catalog.json, muc-luc.md). Cộng thêm các release dạng cũ `vid-YYYYMMDD-HHMMSS-hash` của cùng ngày (mỗi release = 1 video).
+export async function countTodayVideos(repo, tz, { ghFn = gh, now = new Date() } = {}) {
+  const ymd = todayStr(tz, now);
+  const rel = await getReleaseByTag(repo, dayTagOf(ymd), ghFn);
+  let n = rel && !rel.draft ? countMainAssets(rel.assets) : 0;
+  const l = await ghFn(['release', 'list', '--repo', repo, '--limit', '200', '--json', 'tagName']);
+  if (l.code === 0) {
+    try {
+      n += JSON.parse(l.stdout || '[]').filter((x) => { const m = LEGACY_TAG_RE.exec(x.tagName); return m && m[1] === ymd; }).length;
+    } catch { /* bỏ qua: chỉ để tính hạn mức cho release dạng cũ */ }
+  }
+  return n;
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

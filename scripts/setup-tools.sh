@@ -65,14 +65,20 @@ check_ffmpeg() {
   local enc filt
   enc="$(ffmpeg -hide_banner -encoders 2>/dev/null)" || return 1
   filt="$(ffmpeg -hide_banner -filters 2>/dev/null)" || return 1
-  grep -q libsvtav1 <<<"$enc" && grep -q libx265 <<<"$enc" && grep -q libopus <<<"$enc" && grep -q libvmaf <<<"$filt"
+  grep -q libsvtav1 <<<"$enc" && grep -q libx265 <<<"$enc" && grep -q libopus <<<"$enc" && grep -q libvmaf <<<"$filt" \
+    && grep -q libx264 <<<"$enc" && grep -Eq '^ *A[A-Za-z.]* +aac ' <<<"$enc"   # libx264 + aac cho bản điện thoại
 }
 if ! check_ffmpeg; then
-  echo "::warning::ffmpeg tải về thiếu libsvtav1/libx265/libopus/libvmaf. Thử ffmpeg của Ubuntu."
+  echo "::warning::ffmpeg tải về thiếu libsvtav1/libx265/libopus/libvmaf/libx264/aac. Thử ffmpeg của Ubuntu."
   rm -f "$BIN/ffmpeg" "$BIN/ffprobe"; rm -f "$TOOLS_DIR"/.ok-*
   sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
   hash -r
-  check_ffmpeg || { echo "::error::ffmpeg không có đủ libsvtav1, libx265, libopus, libvmaf."; exit 1; }
+  check_ffmpeg || { echo "::error::ffmpeg không có đủ libsvtav1, libx265, libopus, libvmaf, libx264, aac."; exit 1; }
+fi
+# zscale + tonemap chỉ cần để tone-map HDR→SDR cho bản điện thoại. Thiếu thì KHÔNG dừng: bỏ tone-map và màu có thể nhạt.
+filters_now="$(ffmpeg -hide_banner -filters 2>/dev/null || true)"
+if ! grep -Eq '(^| )zscale( |$)' <<<"$filters_now" || ! grep -Eq '(^| )tonemap( |$)' <<<"$filters_now"; then
+  echo "::warning::ffmpeg thiếu zscale/tonemap: bản điện thoại của nguồn HDR sẽ không được tone-map (màu có thể nhạt)."
 fi
 command -v ffprobe >/dev/null || { echo "::error::Thiếu ffprobe"; exit 1; }
 ab-av1 --version || { echo "::error::ab-av1 không chạy được"; exit 1; }

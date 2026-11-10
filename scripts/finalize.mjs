@@ -1,6 +1,7 @@
 // Gom kết quả → cập nhật queue.json theo từng id → commit (thử lại khi xung đột) → gọi lại workflow nếu còn việc.
 import fs from 'node:fs';
-import { loadSettings, loadAllowedHosts, readQueue, writeQueue, run, gh, summary, sleep, countTodayReleases, fmtBytes } from './util.mjs';
+import { loadSettings, loadAllowedHosts, readQueue, writeQueue, run, gh, summary, sleep, countTodayVideos, fmtBytes } from './util.mjs';
+import { syncCatalog } from './catalog-sync.mjs';
 import { validateItem } from '../docs/lib/schema.mjs';
 
 const settings = loadSettings();
@@ -86,18 +87,29 @@ async function commitWithRetry() {
 const rows = changes.map((c) => {
   const r = results.get(c.id) || {};
   const state = c.ok ? '✅ xong' : `❌ ${c.error}`;
-  const size = r.in_bytes && r.out_bytes ? `${fmtBytes(r.in_bytes)} → ${fmtBytes(r.out_bytes)}` : '';
+  const size = r.in_bytes && r.out_bytes ? `${fmtBytes(r.in_bytes)} → ${fmtBytes(r.out_bytes)}${r.phone ? ` (+ điện thoại ${fmtBytes(r.phone.size)})` : r.phone_skipped ? ' (bỏ bản điện thoại)' : ''}` : '';
   return `| \`${c.id}\` | ${state} | ${size} | ${r.tag ? `\`${r.tag}\`` : ''} |`;
 });
 const outcome = changes.length ? await commitWithRetry() : 'unchanged';
 summary(['### Kết quả', '', `Hàng đợi: ${outcome}`, '', '| Mục | Kết quả | Dung lượng | Release |', '|---|---|---|---|', ...rows].join('\n'));
+
+// Cập nhật release mục lục + body các release ngày. Chạy SAU khi đã commit queue.json và không bao giờ làm hỏng bước đó:
+// nếu lỗi thì chỉ ghi cảnh báo, lần chạy sau tự đồng bộ lại (đối chiếu release hôm nay/hôm qua, dựng lại catalog nếu hỏng).
+if (mode !== 'dry_run' && planned.length > 0) {
+  const okResults = changes.filter((c) => c.ok).map((c) => results.get(c.id)).filter(Boolean);
+  const cat = await syncCatalog({ repo, tz: settings.timezone, branch, results: okResults });
+  const lines = [`### Mục lục`, '', cat.warnings.length ? `⚠️ Cập nhật chưa trọn vẹn (${cat.total} video trong catalog).` : `✅ Đã cập nhật mục lục (${cat.total} video), ${cat.updatedDays.length} release ngày.`];
+  for (const w of cat.warnings) lines.push(`- ${w}`);
+  summary(lines.join('\n'));
+  for (const w of cat.warnings) console.log(`::warning::${w}`);
+}
 
 // Gọi lại workflow nếu còn mục chờ, chưa chạm hạn mức ngày và chưa vượt số lần nối tiếp.
 if (mode !== 'dry_run' && planned.length > 0) {
   const q = readQueue();
   const hosts = loadAllowedHosts();
   const pendingLeft = q.items.filter((i) => validateItem(i, { allowedHosts: hosts }).ok && i.status === 'pending').length;
-  const todayCount = await countTodayReleases(repo, settings.timezone);
+  const todayCount = await countTodayVideos(repo, settings.timezone);
   const dayFull = todayCount >= settings.max_items_per_day;
   if (pendingLeft > 0 && !dayFull && chain + 1 < settings.max_chain) {
     const r = await gh(['workflow', 'run', 'compress.yml', '--repo', repo, '--ref', branch, '-f', 'mode=process', '-f', `chain=${chain + 1}`]);

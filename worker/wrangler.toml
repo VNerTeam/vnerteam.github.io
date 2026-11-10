@@ -7,6 +7,7 @@ GH_OWNER = "VNerTeam"        # điền: tên tài khoản chủ repo
 GH_REPO = "vnerteam.github.io"                     # điền: tên repo
 GH_BRANCH = "main"
 WORKFLOW_FILE = "compress.yml"
+TIMEZONE = "Asia/Ho_Chi_Minh"                   # múi giờ hiển thị giờ trong mục lục khi phải dựng lại từ release; nên trùng config/settings.json
 ALLOWED_ORIGIN = "https://vnerteam.github.io"  # chỉ gồm scheme + host, không có đường dẫn
 
 [[kv_namespaces]]

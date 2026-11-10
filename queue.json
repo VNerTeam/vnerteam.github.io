@@ -1,4 +1,141 @@
 {
   "version": 1,
-  "items": []
+  "items": [
+    {
+      "id": "q-20261110-221726-9892de",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/e19709172f4b9ddcc81aaa18c4e28254/3416000/3416074/3416074_2160p.mp4/",
+        "query": "v-acctoken=MTk1OTF8MTQ3NjM0NXwwfDAxYWYzNjg1MWMzMmVhNjFlZjMyMTI2NTlkMmRjNWI4e15754b9943bde86&download=true&download_filename=shenhe8_2160p.mp4"
+      },
+      "referer": null,
+      "label": "shenhe8_2160p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-10T22:17:26.345Z"
+    },
+    {
+      "id": "q-20261110-221726-c09eb1",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/47/3c76b29b3518b3c9cef4f1125c023dcd/3415000/3415045/3415045_2160p.mp4/",
+        "query": "v-acctoken=MTMzMDJ8MTU4OTU4N3wwfDFjMGNiZmY5MzFmMWYyYWYyODc0ODI2OTI3ODNhNzYzb880c3812b2d300b&download=true&download_filename=lisa-was-taken-care-of-by-the-traveler_2160p.mp4"
+      },
+      "referer": null,
+      "label": "lisa-was-taken-care-of-by-the-traveler_2160p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-10T22:17:26.345Z"
+    },
+    {
+      "id": "q-20261110-221726-be7e0c",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/a62b342e97a1aa41a99e44f04df43541/3107000/3107973/3107973_2160p.mp4/",
+        "query": "v-acctoken=MTIzNzF8MzIzMTQ4fDB8N2I1ZTRhMjYwYzVkMGVjNWY5MjcwNGUzZTRkOWQ5Nzc346a2801737e36a4&download=true&download_filename=nilou-aether-full_2160p.mp4"
+      },
+      "referer": null,
+      "label": "nilou-aether-full_2160p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-10T22:17:26.345Z"
+    },
+    {
+      "id": "q-20261110-221726-ddc5fc",
+      "provider": "direct_url",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/get_file/51/b5d26f2e7acd4e1ac8e0bc2b67e82ec1/3107000/3107956/3107956_2160p.mp4/",
+        "query": "v-acctoken=MTA1MTJ8MzIzMTQ4fDB8ZGQ0OGE5NTgyNTEwZTU2YTE3N2UyNzRjNTc0YzFlNzU7fa4d2a71a0e8833&download=true&download_filename=yae-miko-aether_2160p.mp4"
+      },
+      "referer": null,
+      "label": "yae-miko-aether_2160p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-10T22:17:26.345Z"
+    },
+    {
+      "id": "q-20261110-221726-e3ac5a",
+      "provider": "github_release",
+      "ref": {
+        "owner": "VNerTeam",
+        "repo": "storage",
+        "tag": "video-storage",
+        "asset": "genshin-impact-hmv-60-fps_1080p.mp4"
+      },
+      "referer": null,
+      "label": "genshin-impact-hmv-60-fps_1080p",
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "pending",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-10T22:17:26.345Z"
+    }
+  ]
 }

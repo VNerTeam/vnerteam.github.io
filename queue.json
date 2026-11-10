@@ -2,33 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "q-20261110-221726-9892de",
-      "provider": "direct_url",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/get_file/51/e19709172f4b9ddcc81aaa18c4e28254/3416000/3416074/3416074_2160p.mp4/",
-        "query": "v-acctoken=MTk1OTF8MTQ3NjM0NXwwfDAxYWYzNjg1MWMzMmVhNjFlZjMyMTI2NTlkMmRjNWI4e15754b9943bde86&download=true&download_filename=shenhe8_2160p.mp4"
-      },
-      "referer": "https://rule34video.com/video/3416074/shenhe8/",
-      "label": "shenhe8_2160p",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-10T22:17:26.345Z"
-    },
-    {
       "id": "q-20261110-221726-c09eb1",
       "provider": "direct_url",
       "ref": {

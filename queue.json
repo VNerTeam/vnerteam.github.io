@@ -252,6 +252,230 @@
       "ladder_start": 0,
       "last_error": null,
       "added_at": "2026-11-11T12:25:41.173Z"
+    },
+    {
+      "id": "q-20261111-123320-c1bdd6",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3277404/hmv-genshin-impact2/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-37f6f3",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3098297/hmv-genshin-impact-edition-rondoudou-media/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-9d9e8d",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/4504913/hmv-genshin-baddies/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-646b96",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3085443/hmv-genshin-impact-kda-popstars/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-d975a4",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3128841/hmv-genshin-impact-but-with-stuff-rondoudou-media/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-f24f3c",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3298364/hmv-genshin-impact-60fps/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-007cef",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/3337224/ganyu-s-beast-side-hmv-genshin-impact/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
+    },
+    {
+      "id": "q-20261111-123320-0791c6",
+      "provider": "page_link",
+      "ref": {
+        "host": "rule34video.com",
+        "path": "/video/4290518/hmv-you-don-t-matter-to-me-rtxshadowbomb/",
+        "query": null
+      },
+      "referer": null,
+      "link_match": "1080p",
+      "label": null,
+      "options": {
+        "resolution": "original",
+        "quality": "strong",
+        "codec": "hevc",
+        "fps_cap": null,
+        "audio": "opus_128",
+        "container": "mp4",
+        "phone": true,
+        "fetch_mode": "auto",
+        "min_vmaf": null
+      },
+      "status": "naming",
+      "attempts": 0,
+      "ladder_start": 0,
+      "last_error": null,
+      "added_at": "2026-11-11T12:33:20.181Z"
     }
   ]
 }

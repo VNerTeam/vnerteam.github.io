@@ -93,6 +93,24 @@ export function parseLinkClass(v) {
   if (!t.length || t.length > 5 || !t.every((x) => CLASS_TOKEN.test(x))) return null;
   return t;
 }
+// "title_tag" (tuỳ chọn) + "title_class" (bắt buộc) của một host: thẻ chứa tên hiển thị, vd <h1 class="title video">Tên</h1>.
+// Trả về { tag: 'h1' | null, classes: [...] }, hoặc null nếu thiếu/không hợp lệ (khi đó quay về tên file gốc).
+const TAG_NAME = /^[a-z][a-z0-9]{0,9}$/;
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+export function parseTitleSelector(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const classes = parseLinkClass(entry.title_class);
+  if (!classes) return null;
+  let tag = null;
+  const raw = entry.title_tag;
+  if (raw !== undefined && raw !== null && raw !== '') {
+    if (typeof raw !== 'string') return null;
+    tag = raw.trim().toLowerCase();
+    if (tag && (!TAG_NAME.test(tag) || VOID_TAGS.has(tag))) return null;
+    if (!tag) tag = null;
+  }
+  return { tag, classes };
+}
 export const entryKind = (entry) => (parseLinkClass(entry && entry.link_class) ? 'page' : entry && entry.ytdlp === true ? 'ytdlp' : 'direct');
 
 // direct_url, ytdlp và page_link dùng chung: host phải nằm trong allowlist; link_class → page_link, ytdlp:true → ytdlp, còn lại → direct_url.

@@ -263,7 +263,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "3277404_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -275,7 +275,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -291,7 +291,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "3098297_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -303,7 +303,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -319,7 +319,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "4504913_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -331,7 +331,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -347,7 +347,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "3085443_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -359,7 +359,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -375,7 +375,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "3128841_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -387,7 +387,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -403,7 +403,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "3298364_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -415,7 +415,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -431,7 +431,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "3337224_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -443,7 +443,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,
@@ -459,7 +459,7 @@
       },
       "referer": null,
       "link_match": "1080p",
-      "label": null,
+      "label": "4290518_1080p",
       "options": {
         "resolution": "original",
         "quality": "strong",
@@ -471,7 +471,7 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "naming",
+      "status": "pending",
       "attempts": 0,
       "ladder_start": 0,
       "last_error": null,

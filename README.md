@@ -95,9 +95,27 @@ Cấu hình: `config/tools.json` → `playwright_core.version` (cài lười, ch
 
 1. Bấm lưu link: Worker ghi mục với trạng thái **"Đang lấy tên"** (`naming`) rồi gọi workflow `names.yml` (`workflow_dispatch`, cùng PAT và quyền Actions như "Chạy ngay"; tên file ở biến `NAMES_WORKFLOW_FILE` trong `worker/wrangler.toml`).
 2. `scripts/resolve-names.mjs` chạy trên runner (6 link song song, tối đa 60 giây/link), điền tên vào mục rồi chuyển sang `pending`. Làm ở workflow thay vì Worker để nhiều link không làm Worker quá tải.
-3. Tên lấy theo thứ tự: tên trong `Content-Disposition` của phản hồi thật → đoạn cuối URL cuối cùng (phải có đuôi video) → đoạn cuối URL gốc → tham số `download_filename` (chỉ là phương án cuối). Google Drive lấy từ tiêu đề trang. Link "trang có nút tải" lấy từ `href` khớp "Lọc link" (chỉ đọc trang, **không gọi** link tải nên token dùng một lần không bị tiêu). Link `yt-dlp` lấy tên lúc nén.
+3. Tên lấy theo thứ tự:
+   1. **Chữ trong một thẻ trên trang** (cho link kiểu trang: "trang có nút tải" và `yt-dlp`), nếu host có cấu hình `title_class` (xem dưới).
+   2. Không có/không lấy được thì dùng **tên file gốc** của link: tên trong `Content-Disposition` của phản hồi thật → đoạn cuối URL cuối cùng (phải có đuôi video) → đoạn cuối URL gốc → tham số `download_filename` (chỉ là phương án cuối). Google Drive lấy từ tiêu đề trang; link "trang có nút tải" lấy từ `href` khớp "Lọc link" (chỉ đọc trang, **không gọi** link tải nên token dùng một lần không bị tiêu).
+   3. Vẫn không có thì để trống, lúc nén sẽ lấy tên từ file tải về.
 4. **Tên hiển thị giữ nguyên dấu cách** (bỏ đuôi file, tối đa 80 ký tự). Tên file trên Release thì dấu cách và ký tự lạ tự đổi thành `-` (vd `Phim Hay Tập 1` → `Phim-Hay-Tap-1-a1b2c3-hevc.mkv`); phần thêm sau tên chỉ là hậu tố tuỳ chọn (`-hash6-codec`, `-phone`).
 5. Bạn tự gõ tên thì dùng tên đó, không bị ghi đè. Lấy tên không được thì mục vẫn sang `pending` với tên trống, và lúc nén sẽ lấy tên từ file tải về (ưu tiên `Content-Disposition`/tên file của trình duyệt).
+
+**Lấy tên từ thẻ + class** (`config/allowed-hosts.json`):
+
+```json
+{ "host": "phim.example", "allow_query": false, "link_class": "download-btn", "title_tag": "h1", "title_class": "title video" }
+```
+
+- Ví dụ trên lấy chữ trong `<h1 class="title video">Tên Phim</h1>` và chỉ lấy `Tên Phim` (bỏ thẻ con, `<script>`/`<style>`, giải mã `&amp;`…, gộp khoảng trắng; tên giữ nguyên, không bị cắt "đuôi file").
+- `title_class` bắt buộc (một hoặc vài class, thẻ phải có đủ). `title_tag` tuỳ chọn: bỏ trống thì thẻ nào có class đó cũng được (vì có web không dùng `h1`). Cấu hình sai định dạng thì bị bỏ qua và quay về tên file gốc.
+- Thẻ có class phải nằm trong HTML trả về lúc mở trang bình thường (không chạy JavaScript). Tên do JavaScript dựng ra thì chưa lấy được.
+- Link file trực tiếp (`direct_url`) không dùng `title_class`.
+
+**Ghi đè tên thủ công:** Actions → "Lấy tên gốc cho link mới" → Run workflow → bật `overwrite`. Khi bật, workflow lấy lại tên cho **tất cả** mục trong hàng đợi (kể cả mục đã có tên hiển thị hoặc do bạn tự gõ) và ghi đè nếu lấy được tên mới; mục nào lấy không được thì giữ nguyên tên cũ, trạng thái mục không đổi. Mặc định (tắt, và khi Worker tự gọi) thì không đụng tới tên đã có.
+
+Log của workflow ghi rõ nguồn tên ("tiêu đề trên trang N, tên file gốc M, không lấy được K") và id các mục chưa lấy được tên để bạn dễ soi.
 
 An toàn: mục `naming` quá 15 phút (workflow không chạy được) vẫn được nén, không kẹt mãi; Worker không gọi được workflow thì thả mục sang `pending` ngay và báo trên trang.
 

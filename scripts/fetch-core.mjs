@@ -170,8 +170,8 @@ export function assessDownloadedHead(headInfo, fail) {
 }
 
 // ---- trang có nút tải (provider page_link) ----
-const ENT = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
-const decodeEntities = (t) => t.replace(/&(?:#(\d{1,6})|#x([0-9a-f]{1,6})|(amp|quot|apos|lt|gt));/gi, (_, d, x, n) => (n ? ENT[n.toLowerCase()] : String.fromCodePoint(d ? Number(d) : parseInt(x, 16))));
+const ENT = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' };
+const decodeEntities = (t) => t.replace(/&(?:#(\d{1,6})|#x([0-9a-f]{1,6})|(amp|quot|apos|lt|gt|nbsp));/gi, (_, d, x, n) => (n ? ENT[n.toLowerCase()] : String.fromCodePoint(d ? Number(d) : parseInt(x, 16))));
 
 // Lấy href (đã đổi thành URL tuyệt đối) của mọi thẻ <a> có ĐỦ các class trong `classes`. Không dùng thư viện HTML nên chỉ đọc thẻ mở <a ...>.
 export function extractAnchors(html, classes, baseUrl) {
@@ -289,4 +289,48 @@ export function displayNameFromFile(name) {
   if (typeof name !== 'string') return null;
   const t = name.replace(/\.[A-Za-z0-9]{2,5}$/, '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
   return t || null;
+}
+
+// ---- tên lấy từ chữ trong một thẻ (theo thẻ + class cấu hình trong allowed-hosts.json) ----
+const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+function classOf(attrText) {
+  const m = /(?:^|\s)class\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i.exec(attrText);
+  return new Set(decodeEntities(m ? (m[1] ?? m[2] ?? m[3] ?? '') : '').split(/\s+/).filter(Boolean));
+}
+// Lấy CHỮ nằm trong thẻ đầu tiên có đủ class (và đúng tên thẻ nếu có `tag`): <h1 class="title">Name</h1> → "Name".
+// Bỏ các thẻ con (giữ chữ của chúng), bỏ <script>/<style>, giải mã &amp; …, gộp khoảng trắng. Không tìm thấy hoặc rỗng → null.
+export function extractTitleText(html, { tag = null, classes = [] } = {}) {
+  const need = (classes || []).filter(Boolean);
+  if (typeof html !== 'string' || !need.length) return null;
+  const src = html.slice(0, 2 * 1024 * 1024);
+  const open = tag ? new RegExp(`<${tag}\\b([^>]*)>`, 'gi') : /<([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g;
+  for (const m of src.matchAll(open)) {
+    const name = (tag || m[1]).toLowerCase();
+    const attrs = tag ? m[1] : m[2];
+    if (VOID.has(name) || /\/\s*$/.test(attrs)) continue;
+    const have = classOf(attrs);
+    if (!need.every((c) => have.has(c))) continue;
+    const start = m.index + m[0].length;
+    const re = new RegExp(`<(/?)${name}\\b[^>]*>`, 'gi'); // tìm thẻ đóng tương ứng, tính cả thẻ cùng tên lồng bên trong
+    re.lastIndex = start;
+    let depth = 1;
+    let end = -1;
+    for (let r = re.exec(src); r; r = re.exec(src)) {
+      if (r[1]) {
+        depth--;
+        if (!depth) { end = r.index; break; }
+      } else if (!/\/\s*>$/.test(r[0])) depth++;
+    }
+    if (end < 0) continue;
+    const inner = src.slice(start, end).replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, ' ').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, ' ');
+    const text = decodeEntities(inner).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (text) return text.slice(0, 300);
+  }
+  return null;
+}
+// Tên lấy từ tiêu đề: giữ nguyên (KHÔNG cắt "đuôi file" như tên file, vì "Phim v2.0 Final.Cut" là tiêu đề chứ không phải đuôi), tối đa 80 ký tự.
+export function displayNameFromTitle(t) {
+  if (typeof t !== 'string') return null;
+  const x = t.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  return x || null;
 }

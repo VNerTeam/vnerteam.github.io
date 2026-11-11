@@ -1,0 +1,32 @@
+name: Lấy tên gốc cho link mới
+
+# Worker gọi workflow này (workflow_dispatch) ngay sau khi bạn bấm lưu link mới chưa có tên hiển thị.
+# Với mỗi mục "naming", lấy tên file gốc từ chính link rồi điền vào tên hiển thị và chuyển sang "pending".
+# Không có trigger push/pull_request: commit queue.json của Worker hay của workflow này không tự chạy gì khác.
+on:
+  workflow_dispatch:
+
+# Chạy lần lượt, không huỷ lượt đang chạy. Lượt chờ sau luôn đọc queue mới nhất nên bao phủ cả các mục thêm trong lúc lượt trước chạy.
+concurrency:
+  group: names-queue
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  names:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.actor == github.repository_owner || github.actor == 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lấy tên gốc và ghi vào hàng đợi
+        run: node scripts/resolve-names.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

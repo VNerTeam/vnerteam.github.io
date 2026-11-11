@@ -220,7 +220,7 @@
         "min_vmaf": null
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "cancelled",
       "added_at": "2026-11-11T12:33:20.181Z"
@@ -248,7 +248,7 @@
         "min_vmaf": null
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "cancelled",
       "added_at": "2026-11-11T12:33:20.181Z"
@@ -276,7 +276,7 @@
         "min_vmaf": null
       },
       "status": "pending",
-      "attempts": 1,
+      "attempts": 2,
       "ladder_start": 0,
       "last_error": "no_result",
       "added_at": "2026-11-11T12:33:20.181Z"

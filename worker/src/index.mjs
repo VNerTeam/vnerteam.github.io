@@ -259,7 +259,16 @@ async function readBody(request) {
     throw new HttpError(400, 'bad_json', 'Nội dung gửi lên không phải JSON hợp lệ.');
   }
 }
-const countOf = (q) => ({ total: q.items.length, pending: q.items.filter((i) => i.status === 'pending').length, failed: q.items.filter((i) => i.status === 'failed').length });
+const countOf = (q) => ({ total: q.items.length, pending: q.items.filter((i) => i.status === 'pending').length, naming: q.items.filter((i) => i.status === 'naming').length, failed: q.items.filter((i) => i.status === 'failed').length });
+
+function dispatchWorkflow(env, file, inputs) {
+  return ghRequest(env, 'POST', `${repoPath(env)}/actions/workflows/${encodeURIComponent(file)}/dispatches`, { ref: env.GH_BRANCH, inputs });
+}
+const releaseNaming = (env, ids) => mutateQueue(env, 'Bỏ qua bước lấy tên gốc (không gọi được workflow)', (queue) => {
+  let n = 0;
+  for (const it of queue.items) if (it && it.status === 'naming' && ids.includes(it.id)) { it.status = 'pending'; n++; }
+  return { changed: n > 0, out: { released: n } };
+});
 
 async function addItems(env, request) {
   const body = await readBody(request);
@@ -292,7 +301,7 @@ async function addItems(env, request) {
   const out = await mutateQueue(env, `Thêm ${cands.length} mục vào hàng đợi`, (queue) => {
     // chuẩn hoá tuỳ chọn của mục cũ (thiếu khoá mới như phone) để so khớp đúng với mục mới
     const norm = (o) => { const v = validateOptions(o); return v.ok ? v.value : o; };
-    const keys = new Set(queue.items.filter((i) => i && i.status === 'pending').map((i) => dedupeKey(i.provider, i.ref, norm(i.options), i.referer || null, i.link_match || null)));
+    const keys = new Set(queue.items.filter((i) => i && (i.status === 'pending' || i.status === 'naming')).map((i) => dedupeKey(i.provider, i.ref, norm(i.options), i.referer || null, i.link_match || null)));
     const res = [];
     let added = 0;
     for (const c of cands) {
@@ -300,16 +309,29 @@ async function addItems(env, request) {
       if (keys.has(key)) res.push({ index: c.index, ok: false, reason: 'duplicate', message: 'Đã có mục giống hệt đang chờ trong hàng đợi.' });
       else if (queue.items.length >= LIMITS.maxQueue) res.push({ index: c.index, ok: false, reason: 'queue_full', message: `Hàng đợi đã đầy (${LIMITS.maxQueue} mục).` });
       else {
-        queue.items.push({ id: c.id, provider: c.provider, ref: c.ref, referer: c.referer, link_match: c.link_match, label: c.label, options: c.options, status: 'pending', attempts: 0, ladder_start: 0, last_error: null, added_at: now.toISOString() });
+        queue.items.push({ id: c.id, provider: c.provider, ref: c.ref, referer: c.referer, link_match: c.link_match, label: c.label, options: c.options, status: c.label ? 'pending' : 'naming', attempts: 0, ladder_start: 0, last_error: null, added_at: now.toISOString() });
         keys.add(key);
-        res.push({ index: c.index, ok: true, id: c.id, provider: c.provider });
+        res.push({ index: c.index, ok: true, id: c.id, provider: c.provider, naming: !c.label });
         added++;
       }
     }
     return { changed: added > 0, out: { res, added, counts: countOf(queue) } };
   });
   for (const r of out.res) results[r.index] = r;
-  return { results, added: out.added, counts: out.counts };
+  // Mục chưa có tên hiển thị: nhờ workflow "Lấy tên gốc" điền (làm ở đó để nhiều link không làm Worker quá tải).
+  const namingIds = out.res.filter((r) => r.ok && r.naming).map((r) => r.id);
+  let names = 'none';
+  if (namingIds.length) {
+    let ok = false;
+    try {
+      ok = (await dispatchWorkflow(env, env.NAMES_WORKFLOW_FILE || 'names.yml', {})).status === 204;
+    } catch { /* xử lý như thất bại bên dưới */ }
+    names = ok ? 'started' : 'failed';
+    if (!ok) { // không gọi được workflow: thả các mục sang pending (tên trống) để không kẹt ở "naming"
+      try { await releaseNaming(env, namingIds); } catch { /* plan.mjs vẫn tự nhận mục naming quá 15 phút */ }
+    }
+  }
+  return { results, added: out.added, counts: out.counts, names };
 }
 
 async function patchItem(env, request, id) {
@@ -318,7 +340,7 @@ async function patchItem(env, request, id) {
   return mutateQueue(env, `Sửa mục ${id}`, (queue) => {
     const it = queue.items.find((i) => i && i.id === id);
     if (!it) throw new HttpError(404, 'not_found', 'Không tìm thấy mục.');
-    if (!['pending', 'failed'].includes(it.status)) throw new HttpError(409, 'item_busy', 'Mục không ở trạng thái sửa được.');
+    if (!['pending', 'failed', 'naming'].includes(it.status)) throw new HttpError(409, 'item_busy', 'Mục không ở trạng thái sửa được.');
     if ('options' in body) {
       if (!body.options || typeof body.options !== 'object') throw new HttpError(400, 'bad_options', 'Tuỳ chọn không hợp lệ.');
       const o = validateOptions({ ...it.options, ...body.options });
@@ -329,6 +351,7 @@ async function patchItem(env, request, id) {
       const l = validateLabel(body.label);
       if (!l.ok) throw new HttpError(400, 'bad_label', l.message);
       it.label = l.value;
+      if (it.status === 'naming' && it.label) it.status = 'pending'; // người dùng tự đặt tên thì khỏi chờ lấy tên
     }
     if ('referer' in body) {
       const rp = validateRefPage(body.referer);
@@ -361,7 +384,7 @@ async function patchBatch(env, request) {
       if (!('options' in ch) && !('label' in ch) && !('referer' in ch) && !('link_match' in ch)) { no('bad_request', 'Cần gửi options, label, referer hoặc link_match.'); continue; }
       const it = queue.items.find((i) => i && i.id === id);
       if (!it) { no('not_found', 'Không tìm thấy mục (có thể đã xong hoặc đã bị xóa).'); continue; }
-      if (!['pending', 'failed'].includes(it.status)) { no('item_busy', 'Mục không ở trạng thái sửa được.'); continue; }
+      if (!['pending', 'failed', 'naming'].includes(it.status)) { no('item_busy', 'Mục không ở trạng thái sửa được.'); continue; }
       let options = it.options;
       let label = it.label;
       let referer = it.referer ?? null;
@@ -390,6 +413,7 @@ async function patchBatch(env, request) {
       }
       it.options = options;
       it.label = label;
+      if (it.status === 'naming' && label) it.status = 'pending';
       it.referer = referer;
       if (it.provider === 'page_link') it.link_match = linkMatch;
       results.push({ index, id, ok: true });
@@ -426,7 +450,7 @@ async function runWorkflow(env, request) {
     if (typeof body.only_id !== 'string' || !ID_RE.test(body.only_id)) throw new HttpError(400, 'bad_id', 'only_id không hợp lệ.');
     inputs.only_id = body.only_id;
   }
-  const res = await ghRequest(env, 'POST', `${repoPath(env)}/actions/workflows/${encodeURIComponent(env.WORKFLOW_FILE)}/dispatches`, { ref: env.GH_BRANCH, inputs });
+  const res = await dispatchWorkflow(env, env.WORKFLOW_FILE, inputs);
   if (res.status === 204) return { ok: true };
   if (res.status === 404) throw new HttpError(502, 'workflow_not_found', 'Không tìm thấy workflow (hoặc PAT thiếu quyền Actions).');
   throw ghFail(res, 'kích hoạt workflow');

@@ -44,7 +44,11 @@ function fakeGithub() {
     const rt = /\/releases\/tags\/(.+)$/.exec(u.pathname);
     if (rt) return st.releases[rt[1]] ? json(200, st.releases[rt[1]]) : json(404, {});
     if (u.pathname.endsWith('/releases')) return json(200, u.searchParams.get('page') === '1' ? st.list : []);
-    if (u.pathname.endsWith('/dispatches')) { st.dispatches.push(JSON.parse(init.body)); return json(204); }
+    if (u.pathname.endsWith('/dispatches')) {
+      if (st.dispatchStatus && st.dispatchStatus !== 204) return json(st.dispatchStatus, { message: 'no' });
+      (st.dispatchFiles ||= []).push(decodeURIComponent(u.pathname.split('/workflows/')[1].split('/')[0]));
+      st.dispatches.push(JSON.parse(init.body)); return json(204);
+    }
     return json(404, {});
   };
   return st;
@@ -432,4 +436,36 @@ test('page_link: Worker nhận link_match, bỏ qua với provider khác, kiểm
   // cùng trang nhưng khác "Lọc link" không bị coi là trùng
   const a1 = await (await call(env, '/api/queue/add', { method: 'POST', body: { items: [{ url: 'https://phim.example/video/1', link_match: '1080p' }, { url: 'https://phim.example/video/1', link_match: '2160p' }] } })).json();
   assert.equal(a1.added, 2);
+});
+
+// ---------- lấy tên gốc: trạng thái naming + workflow names.yml ----------
+test('add: link không có tên → status naming và gọi names.yml; có tên → pending và không gọi', async () => {
+  const env = makeEnv(); const st = fakeGithub();
+  const r = await call(env, '/api/queue/add', { method: 'POST', body: { items: [{ url: GDRIVE }, { url: `https://drive.google.com/file/d/${'B'.repeat(25)}/view`, label: 'Tên Tôi Đặt' }] } });
+  const d = await r.json();
+  assert.equal(d.names, 'started');
+  assert.deepEqual(st.dispatchFiles, ['names.yml']);
+  assert.deepEqual(q(st).items.map((i) => [i.status, i.label]), [['naming', null], ['pending', 'Tên Tôi Đặt']]);
+  assert.equal(d.counts.naming, 1); assert.equal(d.counts.pending, 1);
+  // chỉ toàn mục có tên thì không gọi workflow
+  const st2 = fakeGithub();
+  const d2 = await (await call(makeEnv(), '/api/queue/add', { method: 'POST', body: { items: [{ url: GDRIVE, label: 'Có tên' }] } })).json();
+  assert.equal(d2.names, 'none'); assert.equal((st2.dispatchFiles || []).length, 0);
+});
+test('add: không gọi được names.yml → thả mục sang pending, báo names=failed (không kẹt ở naming)', async () => {
+  const env = makeEnv(); const st = fakeGithub(); st.dispatchStatus = 404;
+  const d = await (await call(env, '/api/queue/add', { method: 'POST', body: { items: [{ url: GDRIVE }] } })).json();
+  assert.equal(d.names, 'failed');
+  assert.equal(q(st).items[0].status, 'pending');
+});
+test('naming: dedupe tính cả mục đang lấy tên; đặt tên tay thì sang pending; bấm sửa được', async () => {
+  const env = makeEnv(); const st = fakeGithub();
+  await call(env, '/api/queue/add', { method: 'POST', body: { items: [{ url: GDRIVE }] } });
+  const dup = await (await call(env, '/api/queue/add', { method: 'POST', body: { items: [{ url: GDRIVE }] } })).json();
+  assert.equal(dup.added, 0); assert.equal(dup.results[0].reason, 'duplicate');
+  const it = q(st).items[0];
+  assert.equal(it.status, 'naming');
+  const p = await call(env, `/api/queue/item/${it.id}`, { method: 'PATCH', body: { label: 'Tự đặt tên' } });
+  assert.equal(p.status, 200);
+  assert.deepEqual([q(st).items[0].status, q(st).items[0].label], ['pending', 'Tự đặt tên']);
 });

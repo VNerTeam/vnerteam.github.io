@@ -25,6 +25,10 @@ wrangler deploy
 - Đổi password: chạy lại `hash-password.mjs`, đặt lại hai secret, đăng nhập lại trên trang.
 - Chống dò: từ 5 lần sai trong 15 phút theo IP → HTTP 429 kèm `Retry-After`. KV chỉ được ghi khi nhập sai. Nên thêm rate limiting rule của Cloudflare cho `/api/*` nếu gói của bạn cho phép.
 
+## Lấy tên gốc cho link mới
+
+`POST /api/queue/add` nhận mục không có `label` thì ghi `status: "naming"` rồi gọi workflow `NAMES_WORKFLOW_FILE` (mặc định `names.yml`, cần PAT có quyền Actions như `WORKFLOW_FILE`). Kết quả trả thêm `names`: `started` | `failed` (mục được thả sang `pending`) | `none`. Mục có `label` thì vào thẳng `pending`.
+
 ## PIN dự phòng
 
 PIN (4–12 chữ số) lưu trong KV `RATE` khoá `auth:pin` dưới dạng `SHA-256` có salt (không lưu PIN thô), nên dùng được từ mọi thiết bị. Đặt/đổi/xoá qua trang (đăng nhập bằng password) hoặc API: `POST /api/auth/pin {"pin":"123456"}`, `DELETE /api/auth/pin`; đăng nhập bằng PIN nhận `403 password_required`. `GET /api/auth` → `{ kind: "password"|"pin", pin_set }`. Chống dò: 5 lần sai/15 phút theo IP, cộng trần chung 20 lần sai/giờ cho PIN (khoá `fail:pin-global`); password không bị ảnh hưởng. Muốn tắt hẳn PIN: xoá trên trang, hoặc xoá khoá `auth:pin` trong KV.

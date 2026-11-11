@@ -239,3 +239,54 @@ export function cookieHeaderFrom(setCookies) {
   }
   return pairs.join('; ');
 }
+
+// ---- tên file gốc ----
+const VIDEO_NAME = /\.(mp4|mkv|mov|webm|avi|m4v|ts|m2ts|wmv|flv|mpg|mpeg|3gp|ogv)$/i;
+export const looksLikeVideoName = (n) => VIDEO_NAME.test(String(n || ''));
+// Header HTTP được Node đọc theo latin1: tên UTF-8 gửi thô sẽ bị vỡ chữ, thử đọc lại thành UTF-8.
+const fixLatin1 = (t) => {
+  if (!/[\u0080-\u00ff]/.test(t) || /[^\u0000-\u00ff]/.test(t)) return t;
+  const u = Buffer.from(t, 'latin1').toString('utf8');
+  return u.includes('\ufffd') ? t : u;
+};
+// Chỉ lấy tên cuối (bỏ mọi đường dẫn / và \), bỏ ký tự điều khiển; "." và ".." không hợp lệ.
+export function cleanFileName(raw) {
+  const n = String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, '').split(/[\\/]/).pop().trim();
+  return !n || n === '.' || n === '..' ? null : n.slice(0, 200);
+}
+export function filenameFromContentDisposition(v) {
+  if (typeof v !== 'string') return null;
+  const star = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(v); // RFC 5987: filename*=UTF-8''%E2%80%A6
+  if (star) {
+    try {
+      return cleanFileName(decodeURIComponent(star[2].trim().replace(/^"|"$/g, '')));
+    } catch { /* thử dạng filename= bên dưới */ }
+  }
+  const q = /filename\s*=\s*"((?:[^"\\]|\\.)*)"/i.exec(v) || /filename\s*=\s*([^;]+)/i.exec(v);
+  return q ? cleanFileName(fixLatin1(q[1].replace(/\\(.)/g, '$1').trim())) : null;
+}
+export function filenameFromUrl(u) {
+  try {
+    const seg = new URL(u).pathname.split('/').filter(Boolean).pop() || '';
+    try {
+      return cleanFileName(decodeURIComponent(seg));
+    } catch {
+      return cleanFileName(seg);
+    }
+  } catch {
+    return null;
+  }
+}
+// Tên file gốc của một phản hồi: Content-Disposition (đáng tin nhất), rồi đoạn cuối của URL cuối nếu có đuôi video. Không dùng tham số query.
+export function filenameFromResponse(contentDisposition, finalUrl) {
+  const cd = filenameFromContentDisposition(contentDisposition);
+  if (cd) return cd;
+  const u = filenameFromUrl(finalUrl);
+  return u && looksLikeVideoName(u) ? u : null;
+}
+// Tên file → tên hiển thị: bỏ đuôi, giữ dấu cách/ký tự gốc (tên Release tự đổi dấu cách thành "-" khi nén), tối đa 80 ký tự.
+export function displayNameFromFile(name) {
+  if (typeof name !== 'string') return null;
+  const t = name.replace(/\.[A-Za-z0-9]{2,5}$/, '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  return t || null;
+}

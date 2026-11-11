@@ -17,7 +17,8 @@ export const OPTION_CHOICES = {
 };
 export const OPTION_LABELS = { resolution: 'Độ phân giải', quality: 'Chất lượng', codec: 'Codec', fps_cap: 'Khung hình', audio: 'Âm thanh', container: 'Định dạng', phone: 'Bản điện thoại (H.264)', fetch_mode: 'Cách tải', min_vmaf: 'VMAF tối thiểu' };
 export const VMAF_RANGE = [85, 99];
-export const STATUSES = ['pending', 'failed'];
+// naming = vừa thêm, đang chờ workflow "Lấy tên gốc" điền tên hiển thị rồi mới chuyển thành pending.
+export const STATUSES = ['pending', 'failed', 'naming'];
 
 export function defaultOptions() {
   return { resolution: 'original', quality: 'strong', codec: 'hevc', fps_cap: null, audio: 'opus_128', container: 'mkv', phone: true, fetch_mode: 'auto', min_vmaf: null };

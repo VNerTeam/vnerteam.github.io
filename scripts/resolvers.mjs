@@ -1,7 +1,7 @@
 // resolve(provider, ref) → { kind: 'http', url, nameHint } | { kind: 'gdown', id, resourcekey }
 // Thêm provider mới: thêm 1 entry vào RESOLVERS (và matcher/check trong docs/lib/providers.mjs).
 import fs from 'node:fs';
-import { UA, browserHeaders } from './fetch-core.mjs';
+import { UA, browserHeaders, filenameFromResponse } from './fetch-core.mjs';
 import { parseLinkClass, matchAllowedHost } from '../docs/lib/providers.mjs';
 
 export class Fail extends Error {
@@ -101,7 +101,8 @@ export async function probeUrl(url, { ref = null } = {}) {
   const head = Buffer.concat(parts);
   const c = headCheck(head);
   const prevUrl = chain.length > 1 ? chain[chain.length - 2] : url;
-  return { ...c, ctype, size, finalUrl, prevUrl, head };
+  const filename = filenameFromResponse(res.headers.get('content-disposition'), finalUrl);
+  return { ...c, ctype, size, finalUrl, prevUrl, head, filename };
 }
 
 async function getJson(url) {

@@ -18,7 +18,10 @@ for (const raw of queue.items) {
 }
 
 const wantStatus = mode === 'retry_failed' ? 'failed' : 'pending';
-let candidates = valid.filter((i) => i.status === wantStatus);
+// Mục "naming" quá 15 phút (workflow lấy tên không chạy được) vẫn được nén, để không bị kẹt mãi.
+const NAMING_STALE_MS = 15 * 60 * 1000;
+const staleNaming = (i) => i.status === 'naming' && Date.now() - Date.parse(i.added_at) > NAMING_STALE_MS;
+let candidates = valid.filter((i) => i.status === wantStatus || (wantStatus === 'pending' && staleNaming(i)));
 if (onlyId) candidates = candidates.filter((i) => i.id === onlyId);
 
 let slots = settings.max_items_per_run;
@@ -49,7 +52,7 @@ setOutput('invalid', invalid);
 setOutput('day_limit', dayLimit ? 'true' : 'false');
 
 const lines = [`### Kế hoạch (chế độ: \`${mode}\`)`, '',
-  `- Mục hợp lệ: ${valid.length} (chờ: ${valid.filter((i) => i.status === 'pending').length}, lỗi: ${valid.filter((i) => i.status === 'failed').length})`,
+  `- Mục hợp lệ: ${valid.length} (chờ: ${valid.filter((i) => i.status === 'pending').length}, đang lấy tên: ${valid.filter((i) => i.status === 'naming').length}, lỗi: ${valid.filter((i) => i.status === 'failed').length})`,
   `- Sẽ xử lý lần này: **${picked.length}** (tối đa ${settings.max_items_per_run}/lần, ${settings.max_items_per_day}/ngày; hôm nay đã đăng ${usedToday} video)`];
 if (dayLimit) lines.push('- ⚠️ Đã chạm hạn mức ngày. Các mục chờ được giữ nguyên, hãy bấm "Chạy ngay" vào ngày mai.');
 if (invalid.length) lines.push(`- ⚠️ ${invalid.length} mục sai schema sẽ bị đánh dấu lỗi.`);

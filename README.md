@@ -89,6 +89,18 @@ Cấu hình: `config/tools.json` → `playwright_core.version` (cài lười, ch
 
 **Giới hạn thật:** web chặn theo **IP datacenter của GitHub runner** thì trình duyệt cũng không giúp được; không vượt được đăng nhập hay captcha; chế độ trình duyệt tốn thêm khoảng 1–2 phút; link token dùng một lần có thể hỏng nếu đã bị dùng ở bước dò; chỉ tải nội dung bạn có quyền tải. Phần trình duyệt chỉ được kiểm thử bằng Playwright giả; **chưa kiểm chứng trên runner thật**.
 
+### Tên hiển thị = tên file gốc (workflow "Lấy tên gốc")
+
+Ô "Tên hiển thị" **để trống** thì hệ thống tự lấy tên file gốc của chính link đó (không còn đoán từ tham số query nên không bị nhầm):
+
+1. Bấm lưu link: Worker ghi mục với trạng thái **"Đang lấy tên"** (`naming`) rồi gọi workflow `names.yml` (`workflow_dispatch`, cùng PAT và quyền Actions như "Chạy ngay"; tên file ở biến `NAMES_WORKFLOW_FILE` trong `worker/wrangler.toml`).
+2. `scripts/resolve-names.mjs` chạy trên runner (6 link song song, tối đa 60 giây/link), điền tên vào mục rồi chuyển sang `pending`. Làm ở workflow thay vì Worker để nhiều link không làm Worker quá tải.
+3. Tên lấy theo thứ tự: tên trong `Content-Disposition` của phản hồi thật → đoạn cuối URL cuối cùng (phải có đuôi video) → đoạn cuối URL gốc → tham số `download_filename` (chỉ là phương án cuối). Google Drive lấy từ tiêu đề trang. Link "trang có nút tải" lấy từ `href` khớp "Lọc link" (chỉ đọc trang, **không gọi** link tải nên token dùng một lần không bị tiêu). Link `yt-dlp` lấy tên lúc nén.
+4. **Tên hiển thị giữ nguyên dấu cách** (bỏ đuôi file, tối đa 80 ký tự). Tên file trên Release thì dấu cách và ký tự lạ tự đổi thành `-` (vd `Phim Hay Tập 1` → `Phim-Hay-Tap-1-a1b2c3-hevc.mkv`); phần thêm sau tên chỉ là hậu tố tuỳ chọn (`-hash6-codec`, `-phone`).
+5. Bạn tự gõ tên thì dùng tên đó, không bị ghi đè. Lấy tên không được thì mục vẫn sang `pending` với tên trống, và lúc nén sẽ lấy tên từ file tải về (ưu tiên `Content-Disposition`/tên file của trình duyệt).
+
+An toàn: mục `naming` quá 15 phút (workflow không chạy được) vẫn được nén, không kẹt mãi; Worker không gọi được workflow thì thả mục sang `pending` ngay và báo trên trang.
+
 ### allowed-hosts.json
 ```json
 { "hosts": [ { "host": "cdn.example.com", "allow_query": false }, { "host": "*.r2.dev", "allow_query": false } ] }

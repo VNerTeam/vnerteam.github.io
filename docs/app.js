@@ -1,6 +1,6 @@
 // Giao diện quản lý hàng đợi. Mọi chuỗi động hiển thị bằng textContent (không innerHTML).
 import { WORKER_URL } from './config.js';
-import { parseLink, suggestName, PROVIDERS } from './lib/providers.mjs';
+import { parseLink, PROVIDERS } from './lib/providers.mjs';
 import { OPTION_CHOICES, OPTION_LABELS, VMAF_RANGE, defaultOptions, validateOptions, validateLabel, validateRefPage, validateLinkMatch } from './lib/schema.mjs';
 import { fmtDur } from './lib/format.mjs';
 
@@ -239,7 +239,7 @@ function addDrafts() {
   let n = 0;
   for (const { url, r } of parseLines()) {
     if (!r.ok) continue;
-    state.drafts.push({ key: state.nextId++, url, parsed: r, options: { ...state.defaults }, label: suggestName(r.provider, r.ref) || '', referer: '', link_match: '', error: null });
+    state.drafts.push({ key: state.nextId++, url, parsed: r, options: { ...state.defaults }, label: '', referer: '', link_match: '', error: null });
     n++;
   }
   if (n) { $('links').value = ''; renderPreview(); }
@@ -259,7 +259,7 @@ function renderDrafts() {
       h('div', { class: 'row' }, providerBadges(d.parsed.provider), h('span', { class: 'ref grow' }, d.parsed.summary), h('button', { class: 'danger', onclick: () => { state.drafts = state.drafts.filter((x) => x !== d); rerender(); } }, 'Xóa')),
       chips(d.options, d.referer, d.link_match),
       h('details', {}, h('summary', {}, 'Sửa tuỳ chọn'),
-        h('label', { class: 'muted' }, 'Tên hiển thị (tuỳ chọn) ', h('input', { maxlength: 80, value: d.label, oninput: (e) => { d.label = e.target.value; } })),
+        h('label', { class: 'muted' }, 'Tên hiển thị (tuỳ chọn, cho phép dấu cách; để trống thì hệ thống tự lấy tên file gốc) ', h('input', { maxlength: 80, value: d.label, placeholder: 'Để trống: tự lấy tên file gốc từ link', oninput: (e) => { d.label = e.target.value; } })),
         refererInput(d.referer, (v) => { d.referer = v; }),
         d.parsed.provider === 'page_link' ? linkMatchInput(d.link_match, (v) => { d.link_match = v; }) : null,
         optionsEditor(d.options, rerender)),
@@ -292,6 +292,10 @@ async function saveDrafts() {
       if (r.ok) saved++; else { d.error = r.message; keep.push(d); }
     });
     if (saved) $('saveresult').append(h('p', { class: 'msg ok' }, h('strong', {}, 'Đã lưu, chưa chạy.'), ' Bấm "Chạy ngay" ở mục Hàng đợi để bắt đầu.'));
+    if (data.names === 'started') {
+      $('saveresult').append(h('p', { class: 'msg' }, 'Đang lấy tên file gốc cho các link chưa đặt tên (khoảng 1 phút), danh sách sẽ tự cập nhật.'));
+      for (const ms of [20000, 45000, 90000]) setTimeout(() => { if (state.auth) loadQueue(); }, ms);
+    } else if (data.names === 'failed') $('saveresult').append(h('p', { class: 'msg warn' }, 'Không gọi được workflow lấy tên gốc (PAT thiếu quyền Actions, hoặc chưa có names.yml trên repo). Các mục vẫn được lưu, tên trống sẽ lấy từ file lúc nén.'));
     state.drafts = [...state.drafts.filter((d) => !sent.includes(d)), ...keep];
     renderDrafts(); loadQueue();
   } catch (e) {
@@ -305,7 +309,7 @@ async function loadQueue() {
     const d = await api('/api/queue');
     state.queue = d.queue.items;
     for (const id of [...state.edits.keys()]) if (!state.queue.some((i) => i.id === id)) state.edits.delete(id); // mục đã xong/bị xóa
-    $('qsummary').textContent = `${d.counts.pending} đang chờ, ${d.counts.failed} lỗi.`;
+    $('qsummary').textContent = `${d.counts.pending} đang chờ${d.counts.naming ? `, ${d.counts.naming} đang lấy tên` : ''}, ${d.counts.failed} lỗi.`;
     msg($('qmsg'), '');
     renderQueue();
   } catch (e) { if (e.code !== 'unauthorized') msg($('qmsg'), e.message, 'bad'); }
@@ -342,7 +346,7 @@ function renderQueue() {
       updateEditBar();
     };
     card.append(
-      h('div', { class: 'row' }, providerBadges(it.provider), h('strong', { class: 'grow' }, it.label || it.id), dirtyNote, h('span', { class: 'badge' }, failed ? 'Lỗi' : 'Đang chờ')),
+      h('div', { class: 'row' }, providerBadges(it.provider), h('strong', { class: 'grow' }, it.label || (it.status === 'naming' ? 'Đang lấy tên file gốc…' : it.id)), dirtyNote, h('span', { class: 'badge' }, failed ? 'Lỗi' : it.status === 'naming' ? 'Đang lấy tên' : 'Đang chờ')),
       chipEl,
       failed ? h('p', { class: 'msg bad' }, `${errText(it.last_error)} (đã thử ${it.attempts} lần)`) : (it.last_error ? h('p', { class: 'msg warn' }, errText(it.last_error)) : null),
       h('p', { class: 'muted' }, `Thêm lúc ${fmtDate(it.added_at)} • mã ${it.id}`),
@@ -388,7 +392,7 @@ async function saveAll() {
   } catch (e) { if (e.code !== 'unauthorized') msg($('qmsg'), e.message, 'bad'); updateEditBar(); }
 }
 function applyDefaultsToQueue() {
-  const targets = state.queue.filter((i) => ['pending', 'failed'].includes(i.status));
+  const targets = state.queue.filter((i) => ['pending', 'failed', 'naming'].includes(i.status));
   if (!targets.length) return msg($('qmsg'), 'Hàng đợi không có mục chờ hoặc mục lỗi để áp dụng.', 'warn');
   if (!confirm(`Đặt tuỳ chọn mặc định (mục "Tuỳ chọn cho mục mới") cho ${targets.length} mục đang chờ/lỗi? Mới chỉ đánh dấu; bấm "Lưu tất cả thay đổi" để lưu.`)) return;
   for (const it of targets) {
@@ -408,7 +412,7 @@ const CONC_TEXT = { success: 'thành công', failure: 'có lỗi', cancelled: 'b
 async function runNow() {
   $('runnow').disabled = true;
   try {
-    if (!state.queue.some((i) => i.status === 'pending')) return msg($('qmsg'), 'Không có mục nào đang chờ để chạy. Mục lỗi: bấm "Thử lại" trước.', 'warn');
+    if (!state.queue.some((i) => i.status === 'pending')) return msg($('qmsg'), state.queue.some((i) => i.status === 'naming') ? 'Các mục đang được lấy tên gốc, đợi khoảng 1 phút rồi bấm lại (hoặc bấm Làm mới).' : 'Không có mục nào đang chờ để chạy. Mục lỗi: bấm "Thử lại" trước.', 'warn');
     if (state.edits.size && !confirm(`Còn ${state.edits.size} thay đổi chưa lưu. Nếu chạy ngay, hệ thống dùng tuỳ chọn đã lưu trên GitHub (không có các thay đổi này). Vẫn chạy?`)) return;
     let active = null;
     try {

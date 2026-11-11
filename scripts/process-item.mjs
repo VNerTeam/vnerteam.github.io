@@ -651,7 +651,10 @@ async function processItem(item) {
       deferred = true;
       probe = null;
       log('Bước kiểm tra chưa chắc chắn (bị chặn hoặc nhận trang web), để bước tải quyết định.');
-    } else remote = probe.size;
+    } else {
+      remote = probe.size;
+      if (probe.filename) plan0.nameHint = probe.filename; // tên file gốc (Content-Disposition/đuôi URL cuối) thắng tên đoán từ query
+    }
   }
   const maxIn = settings.max_input_gb * GiB;
   if (remote && remote > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(remote)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);

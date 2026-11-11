@@ -51,10 +51,10 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "failed",
-      "attempts": 3,
+      "status": "pending",
+      "attempts": 0,
       "ladder_start": 0,
-      "last_error": "cancelled",
+      "last_error": null,
       "added_at": "2026-11-11T12:25:41.173Z"
     },
     {

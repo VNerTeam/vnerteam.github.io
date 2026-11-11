@@ -5,6 +5,8 @@
       "host": "rule34video.com",
       "allow_query": true,
       "link_class": "tag_item tag_item_download vp-sheet__item",
+      "title_tag": "h1", 
+      "title_class": "title_video",
       "ytdlp": false
     },
     {

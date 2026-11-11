@@ -102,3 +102,23 @@ export function verifyPhone(p, src) {
   if (p.audio.length !== want) return `số luồng âm thanh ${p.audio.length}, cần ${want}`;
   return null;
 }
+
+// ---------- file nguồn bị hỏng khi tải ----------
+// Dấu hiệu ffmpeg/ffprobe in ra khi dữ liệu video/âm thanh trong file bị sai (tải đứt, ghép sai khi resume, CDN trả nhầm byte…).
+export const CORRUPT_RE = /Invalid NAL unit size|Error splitting the input into NAL units|missing picture in access unit|Error submitting packet to decoder|corrupt decoded frame|Decoding error|error while decoding|Invalid data found when processing input/i;
+
+// Gom các dòng lỗi của lượt giải mã thử toàn bộ file: { count, sample }. Bỏ dòng "Last message repeated N times" vì không phải lỗi mới.
+export function summarizeDecodeErrors(lines) {
+  const errs = (lines || []).map((l) => String(l).trim()).filter((l) => l && !/^Last message repeated/i.test(l));
+  return { count: errs.length, sample: (errs[0] || '').slice(0, 160) };
+}
+
+// Cờ đặt TRƯỚC `-i` để ffmpeg bỏ qua gói/khung hỏng thay vì dừng cả tiến trình. Chỉ dùng khi nguồn hỏng sẵn từ gốc (tải lại vẫn ra đúng file đó).
+export const tolerantInputArgs = () => ['-err_detect', 'ignore_err', '-fflags', '+discardcorrupt+genpts'];
+
+// Phần cuối stderr của ffmpeg để báo lỗi. Bỏ khối `/usr/bin/time -v` (Command being timed, Page size…) vì nó chen vào làm mất thông báo thật.
+export function ffErrTail(stderr, n = 2) {
+  const text = String(stderr || '').split(/\r?\n/);
+  const cut = text.findIndex((l) => l.startsWith('Command being timed'));
+  return (cut >= 0 ? text.slice(0, cut) : text).map((l) => l.trim()).filter(Boolean).slice(-n).join(' | ').slice(0, 200);
+}

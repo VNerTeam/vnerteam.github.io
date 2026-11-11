@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  assetNames, isMainAsset, isPhoneAsset, countMainAssets, mdEsc, downloadUrl, dayTitle, toEntry, upsertEntries, parseCatalog, fromReleases,
+  assetNames, phoneAssetName, parseMainName, isPhoneOf, isMainAsset, isPhoneAsset, countMainAssets, mdEsc, downloadUrl, dayTitle, toEntry, upsertEntries, parseCatalog, fromReleases,
   buildDayBody, buildCatalogBody, buildCatalogMarkdown, daysView, groupByDate, BODY_SOFT_LIMIT, CATALOG_TAG,
 } from '../docs/lib/catalog.mjs';
 import { countTodayVideos } from '../scripts/util.mjs';
@@ -206,4 +206,28 @@ test('syncCatalog: lỗi cập nhật không ném ra, chỉ cảnh báo', async 
   const { fn } = fakeGh({ failEdit: true, releases: { 'vid-20261110': { assets: [{ ...e1.main, state: 'uploaded', size: 4e8 }] } } });
   const r = await syncCatalog({ repo: REPO, tz: 'Asia/Ho_Chi_Minh', branch: 'main', results: [{ ...e1, ok: true }], dir: dirTmp(), ghFn: fn, now: NOW });
   assert.ok(r.warnings.some((w) => /tự đồng bộ lại/.test(w)));
+});
+
+test('tên asset có độ phân giải + codec; bản điện thoại theo độ phân giải riêng của nó', () => {
+  const id = 'q-20261111-123320-646b96';
+  const n = assetNames({ slug: 'HMV-Genshin', id, codec: 'hevc', container: 'mp4', height: 2160, phoneHeight: 1080 });
+  assert.equal(n.main, 'HMV-Genshin-646b96-2160p-hevc.mp4');
+  assert.equal(n.phone, 'HMV-Genshin-646b96-1080p-h264-phone.mp4');
+  assert.ok(isMainAsset(n.main) && !isPhoneAsset(n.main) && isPhoneAsset(n.phone) && !isMainAsset(n.phone));
+  assert.ok(isPhoneOf(n.main, n.phone));
+  assert.equal(assetNames({ slug: 'a', id, codec: 'av1', container: 'mkv', height: 1080, fps: 30 }).main, 'a-646b96-1080p30-av1.mkv');
+  assert.equal(phoneAssetName({ slug: 'a', id, height: 720, fps: 30 }), 'a-646b96-720p30-h264-phone.mp4');
+  assert.deepEqual(parseMainName('x-1080p-y-646b96-1440p-hevc.mkv'), { slug: 'x-1080p-y', hash6: '646b96', codec: 'hevc', container: 'mkv' });
+  // tên kiểu cũ vẫn nhận ra và vẫn ghép được với nhau
+  assert.ok(isMainAsset('x-646b96-hevc.mkv') && isPhoneAsset('x-646b96-phone.mp4') && isPhoneOf('x-646b96-hevc.mkv', 'x-646b96-phone.mp4'));
+  assert.ok(isPhoneOf('x-646b96-2160p-hevc.mkv', 'x-646b96-1080p-h264-phone.mp4'));
+  assert.equal(isPhoneOf('x-646b96-2160p-hevc.mkv', 'y-646b96-1080p-h264-phone.mp4'), false);
+});
+
+test('dựng lại từ release: ghép phone khi tên có độ phân giải khác nhau', () => {
+  const up = (name) => ({ name, state: 'uploaded', size: 10 });
+  const e = fromReleases([{ tag_name: 'vid-20261110', assets: [up('phim-a1b2c3-2160p-hevc.mkv'), up('phim-a1b2c3-1080p-h264-phone.mp4')] }], { repo: REPO, tz: 'Asia/Ho_Chi_Minh' });
+  assert.equal(e.length, 1);
+  assert.equal(e[0].name, 'phim');
+  assert.equal(e[0].phone.name, 'phim-a1b2c3-1080p-h264-phone.mp4');
 });

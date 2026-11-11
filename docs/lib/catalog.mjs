@@ -9,8 +9,11 @@ export const CATALOG_MD = 'muc-luc.md';
 export const BODY_SOFT_LIMIT = 110000; // GitHub cho tối đa ~125.000 ký tự trong phần mô tả
 export const DAY_TAG_RE = /^vid-(\d{4})(\d{2})(\d{2})$/;
 export const LEGACY_TAG_RE = /^vid-(\d{8})-(\d{6})-([0-9a-f]{6})$/;
-const MAIN_RE = /^(.+)-([0-9a-f]{6})-(av1|hevc)\.(mkv|mp4)$/;
-const PHONE_RE = /^(.+)-([0-9a-f]{6})-phone\.mp4$/;
+// Tên asset: {slug}-{hash6}[-{cao}p[{fps}]]-{codec}.{ext} (bản thường) và {slug}-{hash6}[-{cao}p[{fps}]][-h264]-phone.mp4 (bản điện thoại).
+// Phần độ phân giải/codec là tuỳ chọn trong regex để vẫn nhận ra các asset đặt tên kiểu cũ ({slug}-{hash6}-{codec}.{ext}, {slug}-{hash6}-phone.mp4).
+const RES_PART = '(?:-\\d{3,4}p(?:\\d{2,3})?)?';
+const MAIN_RE = new RegExp(`^(.+)-([0-9a-f]{6})${RES_PART}-(av1|hevc)\\.(mkv|mp4)$`);
+const PHONE_RE = new RegExp(`^(.+)-([0-9a-f]{6})${RES_PART}(?:-h264)?-phone\\.mp4$`);
 const VIDEO_EXT_RE = /\.(mkv|mp4|webm|mov)$/i;
 
 // ---------- tag, tên asset ----------
@@ -18,12 +21,28 @@ export const dayTagOf = (yyyymmdd) => `vid-${yyyymmdd}`;
 export const dateDash = (yyyymmdd) => `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 export const dayTitle = (yyyymmdd, n) => `📅 ${dateDash(yyyymmdd)} · ${n} video`;
 export const hash6Of = (id) => String(id).slice(-6);
-export function assetNames({ slug, id, codec, container }) {
-  const h = hash6Of(id);
-  return { main: `${slug}-${h}-${codec}.${container}`, phone: `${slug}-${h}-phone.mp4` };
+// Phần thông số trong tên file: chiều cao THỰC của video ra (cạnh ngắn, vd 2160p/1080p), kèm fps nếu có giới hạn fps (vd 1080p30). Thiếu chiều cao thì bỏ phần này.
+export const resTag = (height, fps) => (Number.isFinite(height) && height > 0 ? `-${Math.round(height)}p${Number.isFinite(fps) && fps > 0 ? Math.round(fps) : ''}` : '');
+// Bản thường: {slug}-{hash6}-{cao}p[fps]-{codec}.{ext}. Bản điện thoại có độ phân giải RIÊNG (thường bị ép về ≤ 1920 cạnh dài) nên truyền phoneHeight riêng.
+export function phoneAssetName({ slug, id, height, fps }) {
+  return `${slug}-${hash6Of(id)}${resTag(height, fps)}${Number.isFinite(height) && height > 0 ? '-h264' : ''}-phone.mp4`;
+}
+export function assetNames({ slug, id, codec, container, height, fps, phoneHeight }) {
+  return { main: `${slug}-${hash6Of(id)}${resTag(height, fps)}-${codec}.${container}`, phone: phoneAssetName({ slug, id, height: phoneHeight, fps }) };
 }
 export const isPhoneAsset = (name) => PHONE_RE.test(name);
 export const isMainAsset = (name) => MAIN_RE.test(name);
+// Tách tên bản thường → { slug, hash6 }, hoặc null nếu không đúng dạng.
+export function parseMainName(name) {
+  const m = MAIN_RE.exec(String(name));
+  return m ? { slug: m[1], hash6: m[2], codec: m[3], container: m[4] } : null;
+}
+// Bản điện thoại có đi cùng bản thường này không (cùng slug + hash6; độ phân giải/codec trong tên có thể khác nhau).
+export function isPhoneOf(mainName, phoneName) {
+  const m = MAIN_RE.exec(String(mainName));
+  const p = PHONE_RE.exec(String(phoneName));
+  return !!m && !!p && m[1] === p[1] && m[2] === p[2];
+}
 // Số VIDEO trong release ngày = số asset bản thường đã upload xong (không tính -phone.mp4, catalog.json, muc-luc.md)
 export function countMainAssets(assets) {
   return (assets || []).filter((a) => isMainAsset(a.name) && (a.state === undefined || a.state === 'uploaded') && (a.size === undefined || a.size > 0)).length;
@@ -118,7 +137,7 @@ export function fromReleases(releases, { repo, tz }) {
       for (const a of assets) {
         const m = MAIN_RE.exec(a.name);
         if (!m) continue;
-        const phoneA = assets.find((p) => PHONE_RE.test(p.name) && p.name === `${m[1]}-${m[2]}-phone.mp4`);
+        const phoneA = assets.find((p) => isPhoneOf(a.name, p.name));
         out.push(made(m[2], m[1], a, phoneA));
       }
     } else {

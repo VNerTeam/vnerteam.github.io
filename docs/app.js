@@ -51,6 +51,7 @@ const ERROR_TEXT = {
   crf_not_found: 'Không đạt được mức VMAF yêu cầu. Thử hạ VMAF tối thiểu.',
   crf_search_failed: 'Bước tìm mức nén (ab-av1) thất bại. Xem log của lần chạy.',
   encode_failed: 'ffmpeg báo lỗi khi nén. Xem log của lần chạy.',
+  source_corrupt: 'File nguồn tải về bị hỏng dữ liệu (đã thử tải lại). Mục sẽ tự thử lại theo max_attempts; nếu vẫn lỗi thì nguồn có thể hỏng sẵn.',
   verify_failed: 'File nén không qua bước kiểm tra (thời lượng/luồng âm thanh).',
   upload_failed: 'Upload lên Release không được xác nhận.',
   release_failed: 'Không tạo được Release.',

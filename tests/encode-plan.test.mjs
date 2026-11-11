@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { makePlan, shortSideScale, phoneOutDims, phoneBitrate, phoneFilter, buildPhoneArgs, verifyPhone, PHONE_TONEMAP } from '../scripts/encode-plan.mjs';
+import { makePlan, shortSideScale, phoneOutDims, phoneBitrate, phoneFilter, buildPhoneArgs, verifyPhone, PHONE_TONEMAP, CORRUPT_RE, summarizeDecodeErrors, tolerantInputArgs, ffErrTail } from '../scripts/encode-plan.mjs';
 import { defaultOptions } from '../docs/lib/schema.mjs';
 
 const profiles = JSON.parse(fs.readFileSync(new URL('../config/profiles.json', import.meta.url), 'utf8'));
@@ -71,4 +71,23 @@ test('B: xác minh bản điện thoại', () => {
   assert.equal(verifyPhone({ ...ok, duration: 2.027 }, { duration: 2, audio: [{}] }), null); // clip 2 giây: đệm AAC không bị coi là lỗi
   assert.match(verifyPhone({ ...ok, duration: 3 }, { duration: 2, audio: [{}] }), /lệch/);
   assert.equal(verifyPhone({ ...ok, audio: [] }, { duration: 100, audio: [] }), null); // nguồn không có tiếng
+});
+
+test('nhận dạng lỗi dữ liệu nguồn hỏng (log thật từ job lỗi)', () => {
+  for (const l of ['[h264 @ 0x649c29fb0100] Invalid NAL unit size (-70593805 > 33751).', '[aac @ 0x1] Error submitting packet to decoder: Invalid data found when processing input', '[vist#0:0/h264 @ 0x1] [dec:h264 @ 0x2] corrupt decoded frame']) assert.ok(CORRUPT_RE.test(l), l);
+  assert.equal(CORRUPT_RE.test('Conversion failed! Unknown encoder libfoo'), false);
+});
+
+test('summarizeDecodeErrors: đếm dòng lỗi, bỏ dòng "Last message repeated"', () => {
+  assert.deepEqual(summarizeDecodeErrors([]), { count: 0, sample: '' });
+  const r = summarizeDecodeErrors(['  [h264 @ 0x1] Invalid NAL unit size (1 > 2).', 'Last message repeated 3 times', '', '[aac @ 0x2] invalid band type']);
+  assert.equal(r.count, 2);
+  assert.equal(r.sample, '[h264 @ 0x1] Invalid NAL unit size (1 > 2).');
+});
+
+test('tolerantInputArgs và ffErrTail', () => {
+  assert.deepEqual(tolerantInputArgs(), ['-err_detect', 'ignore_err', '-fflags', '+discardcorrupt+genpts']);
+  const stderr = '[h264] Invalid NAL unit size\nError opening output\nCommand being timed: "ffmpeg"\n\tPage size (bytes): 4096\n\tExit status: 234\n';
+  assert.equal(ffErrTail(stderr), '[h264] Invalid NAL unit size | Error opening output'); // không còn dính khối /usr/bin/time
+  assert.equal(ffErrTail('a\nb\nc', 1), 'c');
 });

@@ -121,7 +121,7 @@ test('probeVerdict: auto/browser không từ chối sớm 403 hoặc HTML, curl 
 });
 
 test('mã lỗi mới: chỉ browser_failed được thử lại', () => {
-  assert.deepEqual([...RETRYABLE_ERRORS], ['browser_failed']);
+  assert.deepEqual([...RETRYABLE_ERRORS].sort(), ['browser_failed', 'source_corrupt']);
   assert.equal(RETRYABLE_ERRORS.has('browser_no_video'), false);
   assert.equal(RETRYABLE_ERRORS.has('browser_unavailable'), false);
 });

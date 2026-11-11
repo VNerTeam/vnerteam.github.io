@@ -99,7 +99,7 @@ Cấu hình: `config/tools.json` → `playwright_core.version` (cài lười, ch
    1. **Chữ trong một thẻ trên trang** (cho link kiểu trang: "trang có nút tải" và `yt-dlp`), nếu host có cấu hình `title_class` (xem dưới).
    2. Không có/không lấy được thì dùng **tên file gốc** của link: tên trong `Content-Disposition` của phản hồi thật → đoạn cuối URL cuối cùng (phải có đuôi video) → đoạn cuối URL gốc → tham số `download_filename` (chỉ là phương án cuối). Google Drive lấy từ tiêu đề trang; link "trang có nút tải" lấy từ `href` khớp "Lọc link" (chỉ đọc trang, **không gọi** link tải nên token dùng một lần không bị tiêu).
    3. Vẫn không có thì để trống, lúc nén sẽ lấy tên từ file tải về.
-4. **Tên hiển thị giữ nguyên dấu cách** (bỏ đuôi file, tối đa 80 ký tự). Tên file trên Release thì dấu cách và ký tự lạ tự đổi thành `-` (vd `Phim Hay Tập 1` → `Phim-Hay-Tap-1-a1b2c3-hevc.mkv`); phần thêm sau tên chỉ là hậu tố tuỳ chọn (`-hash6-codec`, `-phone`).
+4. **Tên hiển thị giữ nguyên dấu cách** (bỏ đuôi file, tối đa 80 ký tự). Tên file trên Release thì dấu cách và ký tự lạ tự đổi thành `-` (vd `Phim Hay Tập 1` → `Phim-Hay-Tap-1-a1b2c3-hevc.mkv`); phần thêm sau tên là `-hash6`, độ phân giải, codec và `-phone` (xem mục Đầu ra).
 5. Bạn tự gõ tên thì dùng tên đó, không bị ghi đè. Lấy tên không được thì mục vẫn sang `pending` với tên trống, và lúc nén sẽ lấy tên từ file tải về (ưu tiên `Content-Disposition`/tên file của trình duyệt).
 
 **Lấy tên từ thẻ + class** (`config/allowed-hosts.json`):
@@ -144,10 +144,14 @@ Mỗi video cho tối đa **hai file** trong cùng một release:
 
 | File | Tên | Nội dung |
 |---|---|---|
-| Bản thường | `{slug}-{hash6}-{codec}.{ext}` (vd `phim-a1b2c3-hevc.mkv`) | HEVC/AV1 10-bit theo tuỳ chọn, giữ HDR |
-| Bản điện thoại | `{slug}-{hash6}-phone.mp4` | H.264 8-bit `yuv420p`, AAC stereo, `faststart`: có thumbnail và phát mượt trên điện thoại |
+| Bản thường | `{slug}-{hash6}-{cao}p-{codec}.{ext}` (vd `phim-a1b2c3-2160p-hevc.mkv`) | HEVC/AV1 10-bit theo tuỳ chọn, giữ HDR |
+| Bản điện thoại | `{slug}-{hash6}-{cao}p-h264-phone.mp4` (vd `phim-a1b2c3-1080p-h264-phone.mp4`) | H.264 8-bit `yuv420p`, AAC stereo, `faststart`: có thumbnail và phát mượt trên điện thoại |
 
 `hash6` là 6 ký tự cuối của id mục, nên hai video cùng tên không bao giờ ghi đè nhau.
+
+`{cao}p` là **chiều cao thực (cạnh ngắn) của chính file đó**, nên hai bản có thể khác nhau: bản thường 2160p thì bản điện thoại bị ép về 1080p và tên ghi `1080p`. Nếu mục có giới hạn fps thì thêm fps ngay sau (vd `1080p30`). Tên kiểu cũ (`{slug}-{hash6}-{codec}.{ext}`, `{slug}-{hash6}-phone.mp4`) vẫn được nhận ra và ghép cặp bình thường.
+
+**Chống file nguồn bị hỏng:** sau khi tải, job giải mã thử toàn bộ file nguồn. Có lỗi dữ liệu thì tải lại từ đầu **không dùng resume** (tối đa 3 lần). Hai lần tải ra cùng một file (SHA256 giống nhau) nghĩa là nguồn hỏng sẵn: nén tiếp ở chế độ bỏ qua khung hỏng và ghi chú vào release. Vẫn hỏng thì báo `source_corrupt` và mục tự thử lại theo `max_attempts` (lần thử lại không dùng resume ngay từ đầu).
 
 **Bản điện thoại làm từ chính bản thường** (không làm từ file nguồn), theo thông số của `video_to_fhd.bat`: `libx264 -preset medium -crf 25 -maxrate/-bufsize`, `aac 128k`, `-movflags +faststart`, chỉ lấy 1 video + 1 audio đầu, thêm `-ac 2`. Giữ độ phân giải bạn chọn nhưng **cạnh dài tối đa 1920** (bản thường 2K/4K thì bản điện thoại về FHD; bản thường 720p thì vẫn 720p; không bao giờ phóng to). Mức bitrate chọn theo cạnh dài của khung hình đầu ra: ≤ 1280 → 2500k, còn lại → 4500k (`bufsize` = `maxrate` × 2).
 
@@ -216,6 +220,7 @@ BtbN giữ bản cuối mỗi tháng trong 2 năm và 14 bản daily gần nhấ
 | `timeout` | Hết thời gian | Bấm "Thử lại" (lần sau bắt đầu ở nấc nhanh hơn) |
 | `crf_not_found` | Không đạt VMAF yêu cầu | Hạ `min_vmaf` |
 | `crf_search_failed`, `encode_failed` | Lỗi ab-av1/ffmpeg | Xem log; so với `ab-av1 … --help` đã lưu |
+| `source_corrupt` | File nguồn tải về bị hỏng dữ liệu (log có `Invalid NAL unit size`, lỗi AAC…) dù đã tải lại | Tự thử lại tới `max_attempts`; nếu vẫn lỗi thì thử `fetch_mode` khác hoặc nguồn hỏng sẵn |
 | `verify_failed` | Kết quả lệch thời lượng/luồng | Xem log |
 | `no_gain` | Nén xong không nhỏ hơn gốc | Không đăng; bỏ mục hoặc đổi tuỳ chọn |
 | `too_big` | Vẫn ≥ 2 GiB sau khi hạ VMAF tới sàn | Hạ độ phân giải |

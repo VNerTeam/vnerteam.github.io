@@ -10,8 +10,8 @@ import { Fail, resolve, probeUrl, fetchFollow, headCheck, secretsOf, fileHead } 
 import { UA, browserHeaders, curlHeaderArgs, shouldFallbackToBrowser, probeVerdict, assessDownloadedHead, RETRYABLE_ERRORS, extractAnchors, pickLink, nameFromUrl, cookieHeaderFrom, handoffReferer } from './fetch-core.mjs';
 import { ensureBrowser } from './browser-setup.mjs';
 import { parseCrfSearch } from './parse.mjs';
-import { makePlan, buildPhoneArgs, verifyPhone } from './encode-plan.mjs';
-import { dayTagOf, dayTitle, dateDash, assetNames, isMainAsset, tzHM, downloadUrl } from '../docs/lib/catalog.mjs';
+import { makePlan, buildPhoneArgs, verifyPhone, displaySize, CORRUPT_RE, summarizeDecodeErrors, tolerantInputArgs, ffErrTail } from './encode-plan.mjs';
+import { dayTagOf, dayTitle, dateDash, assetNames, phoneAssetName, parseMainName, isPhoneOf, isMainAsset, tzHM, downloadUrl } from '../docs/lib/catalog.mjs';
 
 const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
@@ -24,6 +24,8 @@ const REPO = process.env.GITHUB_REPOSITORY;
 const BRANCH = process.env.DEFAULT_BRANCH || 'main';
 const START = Number(process.env.JOB_START_EPOCH) * 1000 || Date.now();
 const Q_LABEL = { good: 'Tốt', balanced: 'Cân bằng', strong: 'Mạnh' };
+const MAX_DL_TRIES = 3; // số lần tải tối đa khi file nguồn tải về bị hỏng
+let allowResume = true; // curl -C - (tải tiếp khi đứt). Tắt sau khi phát hiện file hỏng, vì ghép sai khi resume là nguyên nhân hay gặp
 
 const budgetMs = () => START + settings.time_budget_min * 60000 - Date.now() - settings.reserve_min * 60000; // thời gian còn dùng cho tải+nén
 const hardMs = () => START + HARD_CAP_MS - Date.now();
@@ -118,8 +120,8 @@ async function crfSearch({ input, encoder, preset, minVmaf, vf, pixFmt, tmp, tim
 }
 
 // ---------- ffmpeg encode ----------
-function buildFfmpegArgs({ input, output, a, plan, opt, step, crf }) {
-  const args = ['-hide_banner', '-nostdin', '-y', '-loglevel', 'warning', '-progress', 'pipe:1', '-nostats', '-i', input, '-map', `0:${a.v.index}`];
+function buildFfmpegArgs({ input, output, a, plan, opt, step, crf, tolerant }) {
+  const args = ['-hide_banner', '-nostdin', '-y', '-loglevel', 'warning', '-progress', 'pipe:1', '-nostats', ...(tolerant ? tolerantInputArgs() : []), '-i', input, '-map', `0:${a.v.index}`];
   for (const s of plan.audio) args.push('-map', `0:${s.index}`);
   for (const i of plan.subs) args.push('-map', `0:${i}`);
   if (plan.attach) args.push('-map', '0:t?');
@@ -163,7 +165,34 @@ async function encode(ctx, crf, step) {
   });
   logPeakRam(r.stderr, 'ffmpeg');
   if (r.timedOut) throw new Fail('timeout', 'Nén vượt thời gian cho phép.');
-  if (r.code !== 0) throw new Fail('encode_failed', `ffmpeg lỗi (mã ${r.code}): ${r.stderr.split('\n').filter((x) => x.trim()).slice(-2).join(' | ').slice(0, 200)}`);
+  if (r.code !== 0) {
+    // Lỗi do dữ liệu nguồn hỏng (NAL/AAC sai…) khác lỗi cấu hình nén: báo riêng để mục được tải lại ở lần thử sau.
+    if (CORRUPT_RE.test(r.stderr)) throw new Fail('source_corrupt', `File nguồn bị hỏng dữ liệu nên ffmpeg dừng (mã ${r.code}): ${ffErrTail(r.stderr)}`);
+    throw new Fail('encode_failed', `ffmpeg lỗi (mã ${r.code}): ${ffErrTail(r.stderr)}`);
+  }
+}
+
+// ---------- kiểm tra file nguồn sau khi tải ----------
+// Giải mã thử TOÀN BỘ file (không ghi ra đâu) để bắt file hỏng giữa chừng. crf-search chỉ lấy vài đoạn mẫu nên không phát hiện được.
+// Trả { count, sample }, hoặc null nếu bỏ qua (không đủ thời gian / hết giờ).
+async function scanSource(file) {
+  const timeoutMs = Math.min(15 * 60000, budgetMs() * 0.1, hardMs() - 30 * 60000);
+  if (timeoutMs < 60000) {
+    log('Bỏ qua kiểm tra toàn vẹn file nguồn: không đủ thời gian.');
+    return null;
+  }
+  log('Kiểm tra toàn vẹn file nguồn (giải mã thử toàn bộ)…');
+  const t0 = Date.now();
+  const lines = [];
+  const r = await spawnStream('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', file, '-map', '0:v:0', '-map', '0:a?', '-f', 'null', '-'],
+    { timeoutMs, onLine: (l, w) => w === 'err' && lines.length < 5000 && lines.push(l) });
+  if (r.timedOut) {
+    log('::warning::Kiểm tra toàn vẹn file nguồn quá lâu, bỏ qua.');
+    return null;
+  }
+  const s = summarizeDecodeErrors(lines);
+  log(`Kiểm tra xong trong ${fmtDur((Date.now() - t0) / 1000)}: ${s.count ? `${s.count} dòng lỗi` : 'không lỗi'}.`);
+  return s;
 }
 
 // ---------- tải ----------
@@ -182,7 +211,7 @@ function checkDownloaded(dest) {
 // Mức 1: curl có header giống trình duyệt, tải tiếp được khi đứt (-C -).
 async function curlGet({ url, dest, maxBytes, timeoutMs, headers, ua = UA, cookiesFile = null, cookieString = '' }) {
   const args = ['--fail', '--location', '--max-redirs', '5', '--proto', '=https', '--proto-redir', '=https', '--retry', '5', '--retry-all-errors', '--retry-delay', '5',
-    '-C', '-', '--connect-timeout', '30', '--speed-limit', '1024', '--speed-time', '180', '--silent', '--show-error', '-A', ua, ...curlHeaderArgs(headers)];
+    ...(allowResume ? ['-C', '-'] : []), '--connect-timeout', '30', '--speed-limit', '1024', '--speed-time', '180', '--silent', '--show-error', '-A', ua, ...curlHeaderArgs(headers)];
   if (cookiesFile) args.push('-b', cookiesFile);
   else if (cookieString) args.push('-b', cookieString); // chuỗi "a=b; c=d" lấy từ Set-Cookie của trang (không bao giờ log)
   if (maxBytes) args.push('--max-filesize', String(maxBytes));
@@ -456,7 +485,7 @@ async function findExisting(hash6) {
     const assets = (rel.assets || []).filter(okAsset);
     const main = assets.find((x) => isMainAsset(x.name) && x.name.includes(`-${hash6}-`));
     if (!main) continue;
-    const phone = assets.find((x) => x.name === main.name.replace(/-(av1|hevc)\.(mkv|mp4)$/, '-phone.mp4'));
+    const phone = assets.find((x) => isPhoneOf(main.name, x.name));
     return { tag: info.tag, ymd: info.tag.slice(4), main, phone };
   }
   return null;
@@ -582,14 +611,15 @@ async function makePhone({ normalPath, src }) {
     });
     logPeakRam(r.stderr, 'ffmpeg điện thoại');
     if (r.timedOut) return { ok: false, reason: 'hết thời gian khi làm bản điện thoại' };
-    if (r.code !== 0) return { ok: false, reason: `ffmpeg lỗi (mã ${r.code}): ${r.stderr.split('\n').filter((x) => x.trim()).slice(-1)[0] || ''}`.slice(0, 200) };
+    if (r.code !== 0) return { ok: false, reason: `ffmpeg lỗi (mã ${r.code}): ${ffErrTail(r.stderr, 1)}`.slice(0, 200) };
     const p = analyze(await ffprobe(out));
     const bad = verifyPhone(p, src);
     if (bad) return { ok: false, reason: `không qua kiểm tra: ${bad}` };
     const size = fs.statSync(out).size;
     if (size <= 0) return { ok: false, reason: 'file điện thoại rỗng' };
     if (size >= ASSET_LIMIT) return { ok: false, reason: `file ${fmtBytes(size)} ≥ 2 GiB, không đăng được` };
-    return { ok: true, path: out, size, res: `${p.width}x${p.height}`, maxrate: built.maxrate, notes };
+    const pd = displaySize(p);
+    return { ok: true, path: out, size, res: `${p.width}x${p.height}`, height: Math.min(pd.w, pd.h), maxrate: built.maxrate, notes };
   } catch (e) {
     return { ok: false, reason: String(e.message || e).slice(0, 200) };
   }
@@ -607,12 +637,12 @@ async function processItem(item) {
   const existing = await findExisting(hash6);
   if (existing) {
     log(`Đã có bản thường của mục này trong release ${existing.tag}, bỏ qua nén lại.`);
-    const m = /^(.+)-[0-9a-f]{6}-(av1|hevc)\.(mkv|mp4)$/.exec(existing.main.name);
+    const m = parseMainName(existing.main.name);
     const f = (x) => ({ name: x.name, size: x.size, url: x.browser_download_url || downloadUrl(REPO, existing.tag, x.name) });
     const when = existing.main.created_at || new Date().toISOString();
     Object.assign(result, {
       ok: true, skipped: true, thin: true, tag: existing.tag, date: dateDash(existing.ymd), time: tzHM(when, settings.timezone), finished_at: when,
-      name: m ? m[1] : item.label || 'video', out_bytes: existing.main.size, main: f(existing.main), phone: existing.phone ? f(existing.phone) : null,
+      name: m ? m.slug : item.label || 'video', out_bytes: existing.main.size, main: f(existing.main), phone: existing.phone ? f(existing.phone) : null,
     });
     return;
   }
@@ -663,39 +693,71 @@ async function processItem(item) {
   const free = freeBytes(workDir);
   if (free < need) throw new Fail('no_disk', `Đĩa trống ${fmtBytes(free)}, cần ít nhất ${fmtBytes(need)}. Bật free_disk_space hoặc giảm max_input_gb.`);
 
-  // tải
-  let raw = path.join(workDir, 'input.bin');
-  const dlStart = Date.now();
-  if (plan0.kind === 'ytdlp') {
-    const y = await downloadYtdlp(plan0, workDir, maxIn);
-    raw = y.file;
-    plan0.nameHint = y.title;
-    ytdlpVer = await ytdlpVersion(ytdlpBin);
-    result.fetch_method = 'ytdlp';
-  } else if (plan0.kind === 'page') {
-    const d = await downloadPage(plan0, raw, maxIn, { mode, referer, linkMatch: item.link_match, maxIn });
-    raw = d.file;
-    if (d.nameHint) plan0.nameHint = d.nameHint;
-    if (d.method === 'ytdlp') ytdlpVer = await ytdlpVersion(ytdlpBin);
-    result.fetch_method = d.method;
-  } else if (plan0.kind === 'gdown') {
-    await downloadGdown(plan0, raw, Math.min(budgetMs(), hardMs() - 10 * 60000));
-    result.fetch_method = 'gdown';
-  } else {
-    const d = await downloadHttp(plan0, raw, remote ? null : maxIn, { mode, referer, probe, deferred, maxIn });
-    raw = d.file;
-    if (d.nameHint) plan0.nameHint = d.nameHint;
-    if (d.method === 'ytdlp') ytdlpVer = await ytdlpVersion(ytdlpBin);
-    result.fetch_method = d.method;
+  // tải (một lần). Gọi lại được: dọn file input.* của lần trước rồi tải từ đầu.
+  const fetchSource = async () => {
+    for (const f of fs.readdirSync(workDir)) if (f.startsWith('input.')) fs.rmSync(path.join(workDir, f), { recursive: true, force: true });
+    let raw = path.join(workDir, 'input.bin');
+    const dlStart = Date.now();
+    if (plan0.kind === 'ytdlp') {
+      const y = await downloadYtdlp(plan0, workDir, maxIn);
+      raw = y.file;
+      plan0.nameHint = y.title;
+      ytdlpVer = await ytdlpVersion(ytdlpBin);
+      result.fetch_method = 'ytdlp';
+    } else if (plan0.kind === 'page') {
+      const d = await downloadPage(plan0, raw, maxIn, { mode, referer, linkMatch: item.link_match, maxIn });
+      raw = d.file;
+      if (d.nameHint) plan0.nameHint = d.nameHint;
+      if (d.method === 'ytdlp') ytdlpVer = await ytdlpVersion(ytdlpBin);
+      result.fetch_method = d.method;
+    } else if (plan0.kind === 'gdown') {
+      await downloadGdown(plan0, raw, Math.min(budgetMs(), hardMs() - 10 * 60000));
+      result.fetch_method = 'gdown';
+    } else {
+      const d = await downloadHttp(plan0, raw, remote ? null : maxIn, { mode, referer, probe, deferred, maxIn });
+      raw = d.file;
+      if (d.nameHint) plan0.nameHint = d.nameHint;
+      if (d.method === 'ytdlp') ytdlpVer = await ytdlpVersion(ytdlpBin);
+      result.fetch_method = d.method;
+    }
+    log(`Cách tải: ${result.fetch_method}`);
+    const size = fs.statSync(raw).size;
+    if (size > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(size)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);
+    const hc = headCheck(fileHead(raw));
+    if (!hc.video) throw new Fail('not_direct_video', `Nội dung tải về không phải video (${hc.kind}).`);
+    const file = path.join(workDir, `input.${hc.ext}`);
+    fs.renameSync(raw, file);
+    const ms = Date.now() - dlStart;
+    log(`Đã tải ${fmtBytes(size)} trong ${fmtDur(ms / 1000)}`);
+    return { input: file, inSize: size, dlMs: ms };
+  };
+
+  // Tải → giải mã thử toàn bộ. File hỏng (do tải đứt/ghép sai) thì tải lại từ đầu, KHÔNG resume, tối đa MAX_DL_TRIES lần.
+  // Hai lần tải ra cùng một file hỏng (SHA256 giống nhau) nghĩa là lỗi nằm sẵn ở nguồn: nén tiếp ở chế độ bỏ qua khung hỏng thay vì tải lại vô ích.
+  if ((item.attempts || 0) > 0) allowResume = false; // lần thử lại của mục: không dùng resume ngay từ đầu
+  const srcNotes = [];
+  let src;
+  let tolerant = false;
+  let badSha = null;
+  for (let attempt = 1; ; attempt++) {
+    src = await fetchSource();
+    const scan = await scanSource(src.input);
+    if (!scan || scan.count === 0) break;
+    log(`::warning::File nguồn có ${scan.count} dòng lỗi dữ liệu (lần tải ${attempt}/${MAX_DL_TRIES}): ${scan.sample}`);
+    const sha = await sha256File(src.input);
+    if (badSha === sha) {
+      tolerant = true;
+      srcNotes.push('Nguồn có lỗi dữ liệu sẵn trong file gốc (tải lại vẫn ra đúng file đó): đã bỏ qua khung hỏng khi nén, có thể có vài khung/đoạn âm thanh bị lỗi.');
+      log('::warning::Hai lần tải cho cùng một file hỏng → lỗi nằm ở nguồn. Nén tiếp ở chế độ bỏ qua khung hỏng.');
+      break;
+    }
+    if (attempt >= MAX_DL_TRIES) throw new Fail('source_corrupt', `File nguồn vẫn bị hỏng sau ${MAX_DL_TRIES} lần tải (${scan.count} dòng lỗi, vd: ${scan.sample}).`);
+    if (budgetMs() < src.dlMs * 2 + 20 * 60000) throw new Fail('source_corrupt', `File nguồn bị hỏng (${scan.count} dòng lỗi) và không còn đủ thời gian để tải lại.`);
+    badSha = sha;
+    allowResume = false;
+    log('Tải lại từ đầu (không resume)…');
   }
-  log(`Cách tải: ${result.fetch_method}`);
-  const inSize = fs.statSync(raw).size;
-  if (inSize > maxIn) throw new Fail('input_too_big', `File nguồn ${fmtBytes(inSize)} lớn hơn giới hạn ${settings.max_input_gb} GB.`);
-  const hc = headCheck(fileHead(raw));
-  if (!hc.video) throw new Fail('not_direct_video', `Nội dung tải về không phải video (${hc.kind}).`);
-  const input = path.join(workDir, `input.${hc.ext}`);
-  fs.renameSync(raw, input);
-  log(`Đã tải ${fmtBytes(inSize)} trong ${fmtDur((Date.now() - dlStart) / 1000)}`);
+  const { input, inSize } = src;
 
   const a = analyze(await ffprobe(input));
   log(`Nguồn: ${a.width}x${a.height} @${a.fps.toFixed(2)}fps, ${a.codec}, ${a.pixFmt}, ${fmtDur(a.duration)}, ${a.audio.length} âm thanh${a.hdr ? ', HDR' : ''}`);
@@ -703,7 +765,7 @@ async function processItem(item) {
   const ladder = buildLadder(opt.codec, opt.quality);
   const outPath = path.join(workDir, `out.${opt.container}`);
   const tmp = path.join(workDir, 'ab-av1-tmp');
-  const ctx = { input, output: outPath, a, plan, opt };
+  const ctx = { input, output: outPath, a, plan, opt, tolerant };
 
   let minVmaf = opt.min_vmaf ?? q.min_vmaf;
   let stepIdx = Math.min(item.ladder_start || 0, ladder.length - 1);
@@ -767,13 +829,16 @@ async function processItem(item) {
   const info = dayInfo();
   const o2 = analyze(await ffprobe(outPath));
   const nameBase = item.label || (plan0.nameHint ? plan0.nameHint.replace(/\.[A-Za-z0-9]{2,4}$/, '') : 'video');
-  const names = assetNames({ slug: slugify(nameBase, 60, true), id: item.id, codec: opt.codec, container: opt.container });
+  const slug = slugify(nameBase, 60, true);
+  const od = displaySize(o2);
+  // Tên file = tên + hash6 + độ phân giải THỰC của file ra (cạnh ngắn) + codec; fps chỉ thêm khi có giới hạn fps. Bản điện thoại đặt tên theo độ phân giải riêng của nó (xem bên dưới).
+  const names = assetNames({ slug, id: item.id, codec: opt.codec, container: opt.container, height: Math.min(od.w, od.h), fps: plan.fpsCap });
   await ensureDayRelease(info);
   const mainUp = await uploadAsset(info.tag, outPath, names.main, result.out_bytes, sha);
   Object.assign(result, {
     ok: true, tag: info.tag, date: info.date, time: info.time, finished_at: new Date().toISOString(), name: nameBase.slice(0, 120), duration: Math.round(a.duration),
     main: { ...mainUp, res: `${o2.width}x${o2.height}`, codec: opt.codec, crf: search.crf, vmaf: search.vmaf, preset: String(step.preset) },
-    notes: [...plan.notes],
+    notes: [...plan.notes, ...srcNotes],
     tech: {
       res_in: `${a.width}x${a.height}`, res_out: `${o2.width}x${o2.height}`, codec_label: `${opt.codec.toUpperCase()} (${step.encoder})`, crf: search.crf, vmaf_target: minVmaf, vmaf_pred: search.vmaf,
       quality_label: Q_LABEL[opt.quality], fetch_method: result.fetch_method, preset: String(step.preset), encode_seconds: encSeconds,
@@ -789,7 +854,8 @@ async function processItem(item) {
       ph = await makePhone({ normalPath: outPath, src: a });
       if (ph.ok) {
         const psha = await sha256File(ph.path);
-        const up = await uploadAsset(info.tag, ph.path, names.phone, ph.size, psha);
+        const phoneName = phoneAssetName({ slug, id: item.id, height: ph.height, fps: plan.fpsCap });
+        const up = await uploadAsset(info.tag, ph.path, phoneName, ph.size, psha);
         result.phone = { ...up, res: ph.res, codec: 'h264', crf: profiles.phone.crf, maxrate: ph.maxrate, preset: profiles.phone.preset };
         result.notes.push(...ph.notes);
       }

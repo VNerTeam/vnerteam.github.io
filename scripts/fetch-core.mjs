@@ -93,8 +93,8 @@ export function probeVerdict(outcome, mode) {
   return 'reject';
 }
 
-// Chỉ `browser_failed` được thử lại (tính theo max_attempts). Các mã khác là lỗi cố định.
-export const RETRYABLE_ERRORS = new Set(['browser_failed']);
+// `browser_failed` và `source_corrupt` (file nguồn tải về bị hỏng) được thử lại theo max_attempts. Các mã khác là lỗi cố định.
+export const RETRYABLE_ERRORS = new Set(['browser_failed', 'source_corrupt']);
 export const BROWSER_ERRORS = ['browser_failed', 'browser_no_video', 'browser_unavailable'];
 
 // ---- file thực thi: từ chối ----

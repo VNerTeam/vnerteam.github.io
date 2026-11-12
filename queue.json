@@ -24,9 +24,9 @@
         "min_vmaf": null
       },
       "status": "failed",
-      "attempts": 3,
+      "attempts": 4,
       "ladder_start": 2,
-      "last_error": "too_long",
+      "last_error": "cancelled",
       "added_at": "2026-11-11T12:25:41.173Z"
     }
   ]

@@ -181,6 +181,15 @@ Mỗi job nén tự **phát hành ngay khi video của nó xong**, không chờ 
 
 Hệ quả: video cuối quá dài, job hết giờ hoặc bị huỷ **không làm mất** các video đã xong trước đó, vì chúng đã nằm trên release, trong mục lục và đã ra khỏi hàng đợi. Nếu job bị dừng giữa lúc làm bản điện thoại thì bản thường vẫn được giữ, kết quả ghi "bỏ bản điện thoại". Lỗi ở bước phát hành chỉ ghi cảnh báo; `finalize` vẫn chạy như lưới an toàn (đồng bộ lại mục lục, xoá mục còn sót khỏi hàng đợi).
 
+## Ép nén 1 video (bỏ qua kiểm tra thời gian)
+
+Workflow `force-compress.yml` ("Ép nén 1 video"), chạy tay: Actions → Run workflow → nhập **id** mục trong hàng đợi (vd `q-20261111-122541-bddf0e`, xem trong `queue.json`). Dành cho video dài mà `compress.yml` báo `too_long`/`timeout`.
+
+- **Giống compress thường:** cùng tuỳ chọn của mục, cùng tên file, cùng release ngày, phát hành ngay + mục lục + tự xoá khỏi hàng đợi khi xong; lỗi thì ghi vào mục như bình thường.
+- **Bỏ qua:** dự đoán thời gian nén và việc hạ nấc tốc độ (dùng đúng nấc `ladder_start` của mục), quét toàn vẹn nguồn, hạn mức ngày `max_items_per_day`, ngân sách `time_budget_min`/`reserve_min`.
+- **Thời gian:** job đặt `timeout-minutes: 360`, nén được dùng tới ~350 phút trừ 20 phút chừa cho upload/mục lục. Video cần hơn thế vẫn không nén được trên runner của GitHub (cần self-hosted).
+- Chấp nhận mục ở mọi trạng thái (`pending`, `failed`, `naming`). Không tự gọi lại workflow. Đừng chạy cùng lúc với "Nén video theo hàng đợi" cho cùng một mục.
+
 ## Release theo ngày và release mục lục
 
 GitHub giới hạn **1000 file đính kèm mỗi release** và 2 GiB mỗi file (không giới hạn tổng dung lượng, và không có giới hạn số release), nên các video được gom theo ngày thay vì mỗi video một release.

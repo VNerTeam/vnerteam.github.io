@@ -105,7 +105,7 @@ if (mode !== 'dry_run' && planned.length > 0) {
 }
 
 // Gọi lại workflow nếu còn mục chờ, chưa chạm hạn mức ngày và chưa vượt số lần nối tiếp.
-if (mode !== 'dry_run' && planned.length > 0) {
+if (mode !== 'dry_run' && mode !== 'force' && planned.length > 0) { // ép nén (1 mục thủ công) không tự gọi lại workflow
   const q = readQueue();
   const hosts = loadAllowedHosts();
   const pendingLeft = q.items.filter((i) => validateItem(i, { allowedHosts: hosts }).ok && i.status === 'pending').length;

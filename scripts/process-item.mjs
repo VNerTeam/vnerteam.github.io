@@ -17,7 +17,10 @@ import { dayTagOf, dayTitle, dateDash, assetNames, phoneAssetName, parseMainName
 const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
 const ASSET_LIMIT = 2 * GiB - 16 * MiB; // giới hạn 2 GiB/asset, trừ biên an toàn
-const HARD_CAP_MS = 340 * 60 * 1000; // trần 6 giờ của GitHub, chừa 20 phút
+// Chế độ ÉP NÉN (workflow force-compress.yml): bỏ qua mọi kiểm tra ngân sách thời gian (dự đoán thời gian nén, hạ nấc tốc độ, quét toàn vẹn nguồn),
+// tải và nén ngay, dùng gần hết 6 giờ của job. Đầu ra giống compress bình thường.
+const FORCE = process.env.FORCE_ENCODE === '1';
+const HARD_CAP_MS = (FORCE ? 350 : 340) * 60 * 1000; // trần 6 giờ của GitHub (job ép nén đặt timeout 360 phút), chừa 10–20 phút
 
 const settings = loadSettings();
 const profiles = loadProfiles();
@@ -28,7 +31,8 @@ const Q_LABEL = { good: 'Tốt', balanced: 'Cân bằng', strong: 'Mạnh' };
 const MAX_DL_TRIES = 3; // số lần tải tối đa khi file nguồn tải về bị hỏng
 let allowResume = true; // curl -C - (tải tiếp khi đứt). Tắt sau khi phát hiện file hỏng, vì ghép sai khi resume là nguyên nhân hay gặp
 
-const budgetMs = () => START + settings.time_budget_min * 60000 - Date.now() - settings.reserve_min * 60000; // thời gian còn dùng cho tải+nén
+// thời gian còn dùng cho tải+nén. Ép nén: dùng tới trần cứng, chừa 20 phút cho upload + mục lục.
+const budgetMs = () => (FORCE ? hardMs() - 20 * 60000 : START + settings.time_budget_min * 60000 - Date.now() - settings.reserve_min * 60000);
 const hardMs = () => START + HARD_CAP_MS - Date.now();
 
 let workDir = null;
@@ -181,6 +185,10 @@ async function encode(ctx, crf, step) {
 // Giải mã thử TOÀN BỘ file (không ghi ra đâu) để bắt file hỏng giữa chừng. crf-search chỉ lấy vài đoạn mẫu nên không phát hiện được.
 // Trả { count, sample }, hoặc null nếu bỏ qua (không đủ thời gian / hết giờ).
 async function scanSource(file) {
+  if (FORCE) {
+    log('Ép nén: bỏ qua kiểm tra toàn vẹn file nguồn để dành thời gian cho bước nén.');
+    return null;
+  }
   const timeoutMs = Math.min(15 * 60000, budgetMs() * 0.1, hardMs() - 30 * 60000);
   if (timeoutMs < 60000) {
     log('Bỏ qua kiểm tra toàn vẹn file nguồn: không đủ thời gian.');
@@ -637,6 +645,7 @@ async function processItem(item) {
   const q = profiles.qualities[opt.quality];
   const hash6 = item.id.slice(-6);
   for (const s of secretsOf(item.provider, item.ref)) mask(s);
+  if (FORCE) log('::notice::CHẾ ĐỘ ÉP NÉN: bỏ qua kiểm tra thời gian nén, nén thẳng.');
   log(`Mục ${item.id} • ${PROVIDERS[item.provider].label} • ${opt.resolution}/${opt.quality}/${opt.codec}`);
 
   const existing = await findExisting(hash6);
@@ -788,7 +797,8 @@ async function processItem(item) {
       if (left < 60000) throw new Fail('too_long', 'Không còn đủ thời gian trong ngân sách.', { ladder_start: Math.min(i, ladder.length - 1) });
       const s = await crfSearch({ input, encoder: ladder[i].encoder, preset: ladder[i].preset, minVmaf, vf: plan.vf, pixFmt: plan.pixFmt, tmp, timeoutMs: left });
       const remaining = budgetMs();
-      if (s.seconds == null || s.seconds * 1.2 * 1000 <= remaining) {
+      if (FORCE || s.seconds == null || s.seconds * 1.2 * 1000 <= remaining) {
+        if (FORCE && s.seconds != null && s.seconds * 1.2 * 1000 > remaining) log(`::warning::Ép nén: dự đoán ${fmtDur(s.seconds)} vượt thời gian còn ${fmtDur(remaining / 1000)} nhưng vẫn nén (không hạ nấc tốc độ).`);
         search = s;
         stepIdx = i;
         break;

@@ -1,0 +1,124 @@
+name: Ép nén 1 video (bỏ qua kiểm tra thời gian)
+
+# Chạy thủ công: nhập id mục trong hàng đợi (vd q-20261111-122541-bddf0e).
+# Giống "Nén video theo hàng đợi" (cùng tuỳ chọn, cùng tên file, cùng release ngày, cùng mục lục, tự xoá khỏi hàng đợi khi xong)
+# nhưng BỎ QUA kiểm tra ngân sách thời gian: không dự đoán thời gian nén để hạ nấc tốc độ, không quét nguồn, không xét hạn mức ngày.
+# Tải và nén ngay, dùng tới gần hết 6 giờ của một job. Vẫn thua nếu video cần hơn 6 giờ (trần cứng của GitHub).
+# Không tự gọi lại workflow nào, không có trigger push/pull_request.
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: "id mục trong hàng đợi cần ép nén (vd q-20261111-122541-bddf0e)"
+        type: string
+        required: true
+
+concurrency:
+  group: compress-force
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  plan:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.actor == github.repository_owner || github.actor == 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      has_items: ${{ steps.plan.outputs.has_items }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      runner: ${{ steps.plan.outputs.runner }}
+      free_disk: ${{ steps.plan.outputs.free_disk }}
+      invalid: ${{ steps.plan.outputs.invalid }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: plan
+        run: node scripts/plan-force.mjs
+        env:
+          ONLY_ID: ${{ inputs.id }}
+
+  compress:
+    needs: plan
+    if: needs.plan.outputs.has_items == 'true'
+    runs-on: ${{ fromJSON(needs.plan.outputs.runner) }}
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Ghi mốc thời gian bắt đầu job
+        run: echo "JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+      - name: Dọn bớt phần mềm cài sẵn (tuỳ chọn)
+        if: needs.plan.outputs.free_disk == 'true'
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+      - name: Cache công cụ
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/tools
+            ~/.cache/pip
+          key: tools-${{ runner.os }}-${{ hashFiles('config/tools.json') }}
+      - name: Cài và kiểm tra công cụ
+        run: bash scripts/setup-tools.sh
+      - name: Nén mục ${{ matrix.id }}
+        run: node scripts/process-item.mjs
+        env:
+          ITEM_JSON: ${{ toJSON(matrix.item) }}
+          FORCE_ENCODE: "1"
+      - name: Ghi kết quả dự phòng nếu job lỗi giữa chừng
+        if: always()
+        run: node scripts/ensure-result.mjs
+        env:
+          ITEM_JSON: ${{ toJSON(matrix.item) }}
+          JOB_STATUS: ${{ job.status }}
+      - name: Lưu kết quả
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: result-${{ matrix.id }}
+          path: results/result-${{ matrix.id }}.json
+          if-no-files-found: ignore
+          retention-days: 1
+      - name: Dọn thư mục tạm (lớp phòng thủ thứ hai) và kiểm tra
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP"/item-* "$HOME/.cache/gdown"
+          if ls -d "$RUNNER_TEMP"/item-* >/dev/null 2>&1; then echo "::warning::Vẫn còn thư mục item-* chưa dọn"; else echo "Đã dọn sạch thư mục item-*"; fi
+
+  finalize:
+    needs: [plan, compress]
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.has_items == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: result-*
+          merge-multiple: true
+          path: results
+      - name: Cập nhật hàng đợi
+        run: node scripts/finalize.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PLAN_MATRIX: ${{ needs.plan.outputs.matrix }}
+          PLAN_INVALID: ${{ needs.plan.outputs.invalid }}
+          MODE: force
+          CHAIN: "0"

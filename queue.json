@@ -1,33 +1,4 @@
 {
   "version": 1,
-  "items": [
-    {
-      "id": "q-20261111-122541-edab15",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3439155/fischl-x-slime-a-special-delivery-4k-60fps2/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "1080p",
-      "label": "Fischl x Slime - A Special Delivery (4K 60fps) (NO WM) (ViciNeko)",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 2,
-      "last_error": null,
-      "added_at": "2026-11-11T12:25:41.173Z"
-    }
-  ]
+  "items": []
 }

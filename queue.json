@@ -2,90 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "q-20261111-122541-bddf0e",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/4701532/fischl-slime-vicineko-fart-asmr-edit/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "2160p",
-      "label": "Fischl × Slime - ViciNeko [Fart & ASMR Edit]",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:25:41.173Z"
-    },
-    {
-      "id": "q-20261111-122541-240eeb",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3632607/raiden-yae-ganyu-keqing/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "2160p",
-      "label": "Raiden Yae Ganyu Keqing",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:25:41.173Z"
-    },
-    {
-      "id": "q-20261111-122541-9ac7d3",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3478137/eula-x-lawachurl-4k-vicineko/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "2160p",
-      "label": "Eula X Lawachurl [4K] [Vicineko]",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:25:41.173Z"
-    },
-    {
       "id": "q-20261111-122541-edab15",
       "provider": "page_link",
       "ref": {
@@ -107,66 +23,10 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:25:41.173Z"
-    },
-    {
-      "id": "q-20261111-122541-784e9f",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3097191/vicineko-ganyu-solo-lavender-desires-60fps/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "2160p",
-      "label": "[ViciNeko]Ganyu Solo - Lavender Desires 60FPS",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:25:41.173Z"
-    },
-    {
-      "id": "q-20261111-122541-b8d6f0",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3097181/vicineko-hutao-x-slime-the-quest-continues-60fps/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "1080p",
-      "label": "[ViciNeko]HuTao x Slime - The Quest Continues 60FPS",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
+      "status": "failed",
+      "attempts": 1,
+      "ladder_start": 2,
+      "last_error": "too_long",
       "added_at": "2026-11-11T12:25:41.173Z"
     },
     {

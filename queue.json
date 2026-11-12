@@ -21,7 +21,7 @@
         "container": "mp4",
         "phone": true,
         "fetch_mode": "auto",
-        "min_vmaf": 97
+        "min_vmaf": null
       },
       "status": "pending",
       "attempts": 0,

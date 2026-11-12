@@ -10,7 +10,7 @@
         "query": null
       },
       "referer": null,
-      "link_match": "2160p",
+      "link_match": "1080p",
       "label": "Fischl x Slime - A Special Delivery (4K 60fps) (NO WM) (ViciNeko)",
       "options": {
         "resolution": "original",
@@ -21,7 +21,7 @@
         "container": "mp4",
         "phone": true,
         "fetch_mode": "auto",
-        "min_vmaf": null
+        "min_vmaf": 97
       },
       "status": "pending",
       "attempts": 0,

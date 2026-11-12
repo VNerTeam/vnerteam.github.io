@@ -23,10 +23,10 @@
         "fetch_mode": "auto",
         "min_vmaf": null
       },
-      "status": "pending",
-      "attempts": 0,
+      "status": "failed",
+      "attempts": 1,
       "ladder_start": 2,
-      "last_error": null,
+      "last_error": "crf_not_found",
       "added_at": "2026-11-11T12:25:41.173Z"
     }
   ]

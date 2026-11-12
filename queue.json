@@ -28,34 +28,6 @@
       "ladder_start": 2,
       "last_error": "too_long",
       "added_at": "2026-11-11T12:25:41.173Z"
-    },
-    {
-      "id": "q-20261111-123320-007cef",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3337224/ganyu-s-beast-side-hmv-genshin-impact/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "1080p",
-      "label": "Ganyu's Beast Side - HMV (Genshin Impact)",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:33:20.181Z"
     }
   ]
 }

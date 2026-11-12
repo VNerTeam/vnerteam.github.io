@@ -2,7 +2,7 @@
 
 Bộ công cụ xử lý media mã nguồn mở **dùng cá nhân của chủ repo**. Không phải dịch vụ cho người khác.
 
-Luồng: dán link vào trang web (GitHub Pages) → trang nhận diện storage → chọn tuỳ chọn → "Lưu vào hàng đợi" (**chỉ lưu, chưa chạy**) → **Cloudflare Worker** (xác thực password) ghi `queue.json` → bấm **"Chạy ngay"** → GitHub Actions nén bằng **ab-av1** (tìm CRF nhỏ nhất đạt VMAF mục tiêu) trên ffmpeg tĩnh → (tuỳ chọn) làm thêm bản **H.264 cho điện thoại** → up lên **GitHub Release theo ngày** → xác nhận từng file đã lên → mới xóa mục khỏi hàng đợi và cập nhật **release mục lục**.
+Luồng: dán link vào trang web (GitHub Pages) → trang nhận diện storage → chọn tuỳ chọn → "Lưu vào hàng đợi" (**chỉ lưu, chưa chạy**) → **Cloudflare Worker** (xác thực password) ghi `queue.json` → bấm **"Chạy ngay"** → GitHub Actions nén bằng **ab-av1** (tìm CRF nhỏ nhất đạt VMAF mục tiêu) trên ffmpeg tĩnh → (tuỳ chọn) làm thêm bản **H.264 cho điện thoại** → up lên **GitHub Release theo ngày** → xác nhận từng file đã lên → **ngay lập tức** cập nhật **release mục lục** và xóa mục khỏi hàng đợi (từng video, không chờ cả lượt).
 
 ## Khi nào workflow chạy
 
@@ -169,6 +169,17 @@ Mặc định tuỳ chọn mới: `resolution original, quality strong, codec he
   "caps": [ { "max_long_edge": 1280, "maxrate": "2500k" }, { "max_long_edge": 1920, "maxrate": "4500k" } ],
   "bufsize_factor": 2, "max_long_edge": 1920 }
 ```
+
+## Phát hành ngay từng video (không đợi cả lượt chạy)
+
+Mỗi job nén tự **phát hành ngay khi video của nó xong**, không chờ các video khác hay job `finalize`:
+
+1. Bản thường lên release ngày `vid-YYYYMMDD` và được xác nhận (state, size, SHA256).
+2. **Ngay sau đó**, chính job đó cập nhật release mục lục (`catalog.json`, `muc-luc.md`) + tiêu đề/body release ngày (`scripts/publish-item.mjs`). Các video cùng ngày được **thêm dần** vào cùng một release; nhiều job song song ghi mục lục thì mỗi job đọc lại để kiểm tra video của mình còn trong `catalog.json`, mất do bị ghi đè thì ghi lại.
+3. Rồi **xoá mục khỏi `queue.json`** (Contents API kèm `sha`; xung đột với Worker/job khác thì đọc lại và thử lại), nên đã release thì không còn URL nằm lại trong hàng đợi.
+4. Sau đó mới làm bản điện thoại; xong thì cập nhật mục lục lần nữa để thêm bản đó (không cần xoá queue nữa).
+
+Hệ quả: video cuối quá dài, job hết giờ hoặc bị huỷ **không làm mất** các video đã xong trước đó, vì chúng đã nằm trên release, trong mục lục và đã ra khỏi hàng đợi. Nếu job bị dừng giữa lúc làm bản điện thoại thì bản thường vẫn được giữ, kết quả ghi "bỏ bản điện thoại". Lỗi ở bước phát hành chỉ ghi cảnh báo; `finalize` vẫn chạy như lưới an toàn (đồng bộ lại mục lục, xoá mục còn sót khỏi hàng đợi).
 
 ## Release theo ngày và release mục lục
 

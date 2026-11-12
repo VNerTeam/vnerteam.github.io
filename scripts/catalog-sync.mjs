@@ -23,7 +23,7 @@ async function listDayReleases(repo, ghFn) {
   return all.filter((x) => DAY_TAG_RE.test(x.tag_name));
 }
 
-async function loadCatalog(repo, dir, ghFn) {
+export async function loadCatalog(repo, dir, ghFn) {
   const rel = await getReleaseByTag(repo, CATALOG_TAG, ghFn);
   const asset = rel && (rel.assets || []).find((a) => a.name === CATALOG_JSON && a.state === 'uploaded');
   if (!asset) return null;

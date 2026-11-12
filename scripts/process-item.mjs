@@ -10,6 +10,7 @@ import { Fail, resolve, probeUrl, fetchFollow, headCheck, secretsOf, fileHead } 
 import { UA, browserHeaders, curlHeaderArgs, shouldFallbackToBrowser, probeVerdict, assessDownloadedHead, RETRYABLE_ERRORS, extractAnchors, pickLink, nameFromUrl, cookieHeaderFrom, handoffReferer } from './fetch-core.mjs';
 import { ensureBrowser } from './browser-setup.mjs';
 import { parseCrfSearch } from './parse.mjs';
+import { publishNow } from './publish-item.mjs';
 import { makePlan, buildPhoneArgs, verifyPhone, displaySize, CORRUPT_RE, summarizeDecodeErrors, tolerantInputArgs, ffErrTail } from './encode-plan.mjs';
 import { dayTagOf, dayTitle, dateDash, assetNames, phoneAssetName, parseMainName, isPhoneOf, isMainAsset, tzHM, downloadUrl } from '../docs/lib/catalog.mjs';
 
@@ -47,9 +48,13 @@ function writeResult() {
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {
     killAll();
-    result.ok = false;
-    result.error = 'cancelled';
-    result.retryable = true;
+    if (result.ok) {
+      // Bản thường đã lên release (và đã phát hành): giữ kết quả thành công, chỉ ghi chú là bản điện thoại bị dừng.
+      if (!result.phone && !result.phone_skipped) result.phone_skipped = 'job bị dừng trước khi làm xong bản điện thoại';
+    } else {
+      result.error = 'cancelled';
+      result.retryable = true;
+    }
     cleanupSync();
     writeResult();
     process.exit(130);
@@ -644,6 +649,8 @@ async function processItem(item) {
       ok: true, skipped: true, thin: true, tag: existing.tag, date: dateDash(existing.ymd), time: tzHM(when, settings.timezone), finished_at: when,
       name: m ? m.slug : item.label || 'video', out_bytes: existing.main.size, main: f(existing.main), phone: existing.phone ? f(existing.phone) : null,
     });
+    // đã có trên release từ lần chạy trước (bị dừng giữa chừng): dọn nốt khỏi hàng đợi ngay
+    await publishNow({ repo: REPO, tz: settings.timezone, branch: BRANCH, workDir, result, removeQueue: true, log });
     return;
   }
 
@@ -846,8 +853,12 @@ async function processItem(item) {
     },
   });
 
-  // ---- bản điện thoại (tuỳ chọn): lỗi ở đây KHÔNG làm hỏng mục, chỉ bỏ bản điện thoại ----
+  // ---- PHÁT HÀNH NGAY bản thường: mục lục + xoá khỏi hàng đợi, không đợi các video khác hay job finalize ----
   result.phone = null;
+  const pub = { repo: REPO, tz: settings.timezone, branch: BRANCH, workDir };
+  await publishNow({ ...pub, result, removeQueue: true, log });
+
+  // ---- bản điện thoại (tuỳ chọn): lỗi ở đây KHÔNG làm hỏng mục, chỉ bỏ bản điện thoại ----
   if (opt.phone) {
     let ph;
     try {
@@ -868,6 +879,8 @@ async function processItem(item) {
     }
   }
   fs.rmSync(outPath, { force: true }); // chỉ xoá file ra sau khi đã xác nhận trên release
+  // cập nhật lại mục lục để thêm bản điện thoại (hoặc lý do bỏ). Mục đã nằm ngoài hàng đợi nên không phải xoá nữa.
+  if (opt.phone) await publishNow({ ...pub, result, removeQueue: false, log });
 }
 
 async function main() {
@@ -890,12 +903,19 @@ async function main() {
     fs.mkdirSync(workDir, { recursive: true });
     await processItem(item);
   } catch (e) {
+    if (result.main && result.tag) {
+      // Lỗi xảy ra SAU khi bản thường đã được phát hành: giữ thành công, tuyệt đối không biến thành lỗi/thử lại.
+      result.ok = true;
+      result.phone_skipped = result.phone_skipped || `lỗi sau khi phát hành: ${String(e.message || e)}`.slice(0, 200);
+      console.error(`::warning::Lỗi sau khi đã phát hành bản thường: ${String(e.message || e).slice(0, 200)}`);
+    } else {
     result.ok = false;
     result.error = e instanceof Fail ? e.code : 'internal';
     result.detail = String(e.message || e).slice(0, 300);
     if (Number.isInteger(e.ladder_start)) result.ladder_start = e.ladder_start;
     if (RETRYABLE_ERRORS.has(result.error)) result.retryable = true; // chỉ browser_failed được thử lại (theo max_attempts)
     console.error(`::error::${result.error}: ${result.detail}`);
+    }
   } finally {
     cleanupSync();
     log(fs.existsSync(workDir) ? `⚠️ Chưa dọn được ${workDir}` : `Đã dọn thư mục tạm của mục ${item.id}.`);

@@ -30,34 +30,6 @@
       "added_at": "2026-11-11T12:25:41.173Z"
     },
     {
-      "id": "q-20261111-123320-646b96",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3085443/hmv-genshin-impact-kda-popstars/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "1080p",
-      "label": "HMV - Genshin Impact - KDA - POPSTARS",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-11T12:33:20.181Z"
-    },
-    {
       "id": "q-20261111-123320-f24f3c",
       "provider": "page_link",
       "ref": {

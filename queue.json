@@ -1,34 +1,4 @@
 {
   "version": 1,
-  "items": [
-    {
-      "id": "q-20261113-134216-a00dd2",
-      "provider": "github_release",
-      "ref": {
-        "owner": "VNerTeam",
-        "repo": "storage",
-        "tag": "video-storage",
-        "asset": "genshin-impact-mona-gets-caught-and-fucked-by-hilichurls.mp4"
-      },
-      "referer": null,
-      "link_match": null,
-      "label": "genshin-impact-mona-gets-caught-and-fucked-by-hilichurls",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-13T13:42:16.789Z"
-    }
-  ]
+  "items": []
 }

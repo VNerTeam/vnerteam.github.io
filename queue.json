@@ -1,33 +1,4 @@
 {
   "version": 1,
-  "items": [
-    {
-      "id": "q-20261113-135622-de1098",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/4312958/gi-ganyu-x-hilichurl-bondage-part-2-preview/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": null,
-      "label": "[GI] Ganyu x Hilichurl (bondage) part.2 [preview]",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-13T13:56:22.374Z"
-    }
-  ]
+  "items": []
 }

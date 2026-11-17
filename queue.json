@@ -1,33 +1,4 @@
 {
   "version": 1,
-  "items": [
-    {
-      "id": "q-20261117-105601-1b285f",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/3286154/furina-x-hilichurl-2-clothed-4k-jygreanimation/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "1080p",
-      "label": "Furina x Hilichurl - 2 Clothed 4k「JygreAnimation」",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-17T10:56:01.586Z"
-    }
-  ]
+  "items": []
 }

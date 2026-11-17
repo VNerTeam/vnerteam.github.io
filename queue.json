@@ -2,34 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "q-20261117-105601-3993f9",
-      "provider": "page_link",
-      "ref": {
-        "host": "rule34video.com",
-        "path": "/video/4409377/r-18-mmd-hu-tao-and-ganyu-wife-sex-dance-with-hilichurl-and-mitachurl/",
-        "query": null
-      },
-      "referer": null,
-      "link_match": "1080p",
-      "label": "[R-18 MMD] Hu Tao and Ganyu Wife Sex Dance with Hilichurl and Mitachurl",
-      "options": {
-        "resolution": "original",
-        "quality": "strong",
-        "codec": "hevc",
-        "fps_cap": null,
-        "audio": "opus_128",
-        "container": "mp4",
-        "phone": true,
-        "fetch_mode": "auto",
-        "min_vmaf": null
-      },
-      "status": "pending",
-      "attempts": 0,
-      "ladder_start": 0,
-      "last_error": null,
-      "added_at": "2026-11-17T10:56:01.586Z"
-    },
-    {
       "id": "q-20261117-105601-8d4a3b",
       "provider": "page_link",
       "ref": {
